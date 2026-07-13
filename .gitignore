@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+ml-service/.venv/
+.venv/
+venv/
+env/
+
+# Build outputs
+client/dist/
+client/build/
+server/dist/
+server/build/
+coverage/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local development
+*.local
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Docker / databases
+docker/data/
+*.sqlite
+*.db
+
+# Preparation / notes files in root
+Interview_Prep.md
+INTERVIEW_QUESTIONS.md
+POSTMAN_COLLECTION.json
+POSTMAN_TESTING_GUIDE.txt
+DATABASE_STRUCTURE.txt
