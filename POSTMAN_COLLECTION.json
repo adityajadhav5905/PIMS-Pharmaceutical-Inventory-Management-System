@@ -1,0 +1,764 @@
+{
+  "info": {
+    "_postman_id": "medical-inventory-system",
+    "name": "Medical Inventory Prediction System - API Endpoints",
+    "description": "Complete API testing collection for Medical Inventory Prediction System with all endpoints, authentication, and sample requests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Pharmacist\",\n  \"email\": \"john@hospital.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('authToken', jsonData.token);",
+                  "    pm.environment.set('refreshToken', jsonData.refreshToken);",
+                  "    console.log('Token saved to environment');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@hospital.com\",\n  \"password\": \"ChangeMe123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin Updated\",\n  \"email\": \"admin.updated@hospital.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medicines",
+      "item": [
+        {
+          "name": "List All Medicines",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/medicines",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "medicines"]
+            }
+          }
+        },
+        {
+          "name": "Create Medicine (Admin Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Aspirin\",\n  \"sku\": \"MED-003\",\n  \"brand\": \"Bayer\",\n  \"description\": \"500mg pain relief tablet\",\n  \"category\": \"Pain Relief\",\n  \"supplier\": \"MediSupply\",\n  \"buyingPrice\": 1.5,\n  \"sellingPrice\": 3.5,\n  \"leadTimeDays\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/medicines",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "medicines"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "List All Inventory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory"]
+            }
+          }
+        },
+        {
+          "name": "List Available Stock",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/available",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "available"]
+            }
+          }
+        },
+        {
+          "name": "Create Inventory Batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"medicine\": \"507f1f77bcf86cd799439012\",\n  \"batchNumber\": \"BATCH-PAR-02\",\n  \"currentStock\": 50,\n  \"reorderLevel\": 30,\n  \"expiryDate\": \"2026-12-31T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory"]
+            }
+          }
+        },
+        {
+          "name": "Update Inventory Batch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentStock\": 45,\n  \"reorderLevel\": 25\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/{{inventory_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "{{inventory_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Inventory Batch (Admin Only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/{{inventory_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "{{inventory_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "List All Transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "transactions"]
+            }
+          }
+        },
+        {
+          "name": "Create Stock Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"medicine\": \"507f1f77bcf86cd799439012\",\n  \"inventory\": \"507f1f77bcf86cd799439013\",\n  \"quantity\": 30,\n  \"type\": \"IN\",\n  \"unitBuyPrice\": 2.5,\n  \"unitSellPrice\": 5,\n  \"note\": \"Stock replenishment\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "transactions"]
+            }
+          }
+        },
+        {
+          "name": "Sell Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"medicine\": \"507f1f77bcf86cd799439012\",\n  \"inventory\": \"507f1f77bcf86cd799439013\",\n  \"quantity\": 5,\n  \"note\": \"Ward issue\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/sell",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "sell"]
+            }
+          }
+        },
+        {
+          "name": "Update Transaction",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 25,\n  \"note\": \"Corrected quantity\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/transactions/{{transaction_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "transactions", "{{transaction_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Transaction (Admin Only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/transactions/{{transaction_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inventory", "transactions", "{{transaction_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "List All Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/alerts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "alerts"]
+            }
+          }
+        },
+        {
+          "name": "Get Alert by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/alerts/{{alert_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "alerts", "{{alert_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inventory\": \"507f1f77bcf86cd799439013\",\n  \"type\": \"LOW_STOCK\",\n  \"message\": \"Stock level below reorder threshold\",\n  \"severity\": \"High\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/alerts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "alerts"]
+            }
+          }
+        },
+        {
+          "name": "Close Alert",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/alerts/{{alert_id}}/close",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "alerts", "{{alert_id}}", "close"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Predictions",
+      "item": [
+        {
+          "name": "Run Prediction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"medicineId\": \"507f1f77bcf86cd799439012\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Staff",
+      "item": [
+        {
+          "name": "List All Staff",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff"]
+            }
+          }
+        },
+        {
+          "name": "Get Staff Sales",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/sales",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "sales"]
+            }
+          }
+        },
+        {
+          "name": "Get Staff by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/{{staff_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "{{staff_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Staff (Admin Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@hospital.com\",\n  \"position\": \"Pharmacist\",\n  \"department\": \"Pharmacy\",\n  \"salary\": 50000,\n  \"phone\": \"9876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff"]
+            }
+          }
+        },
+        {
+          "name": "Update Staff (Admin Only)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Smith\",\n  \"salary\": 55000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/{{staff_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "{{staff_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Staff (Admin Only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/{{staff_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "{{staff_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Financials",
+      "item": [
+        {
+          "name": "Get Financial Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/financials/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "financials", "summary"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Export",
+      "item": [
+        {
+          "name": "Export Transactions to CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/export/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "export", "transactions"]
+            }
+          }
+        },
+        {
+          "name": "Export Stock to CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/export/stock",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "export", "stock"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inventory_id",
+      "value": "507f1f77bcf86cd799439013",
+      "type": "string"
+    },
+    {
+      "key": "transaction_id",
+      "value": "507f1f77bcf86cd799439014",
+      "type": "string"
+    },
+    {
+      "key": "alert_id",
+      "value": "507f1f77bcf86cd799439016",
+      "type": "string"
+    },
+    {
+      "key": "staff_id",
+      "value": "507f1f77bcf86cd799439018",
+      "type": "string"
+    }
+  ]
+}
