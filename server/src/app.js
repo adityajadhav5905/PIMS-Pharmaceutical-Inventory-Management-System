@@ -37,10 +37,6 @@ app.use(
       if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes("*")) {
         return callback(null, true);
       }
-      // Support Vercel deployment preview URLs if clientUrl contains vercel.app
-      if (allowedOrigins.some((ao) => ao.includes("vercel.app")) && cleanOrigin.endsWith(".vercel.app")) {
-        return callback(null, true);
-      }
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,

@@ -54,8 +54,7 @@ __pycache__/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# Docker / databases
-docker/data/
+# Databases
 *.sqlite
 *.db
 
