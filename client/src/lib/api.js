@@ -1,5 +1,11 @@
-// Use same-origin proxy in dev (see vite.config.js). Override with VITE_API_URL if needed.
-const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+// Resolve API URL dynamically from VITE_API_URL (e.g. for Vercel pointing to Render backend)
+const resolveApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl) return '/api/v1';
+  const clean = envUrl.trim().replace(/\/$/, '');
+  return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
+};
+const API_URL = resolveApiUrl();
 
 const getToken = () => localStorage.getItem('token');
 const setToken = (t) => localStorage.setItem('token', t);

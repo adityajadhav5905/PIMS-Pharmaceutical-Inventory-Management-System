@@ -21,20 +21,31 @@ app.use(
 const isDevOrigin = (origin) =>
   !origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
+const allowedOrigins = (env.clientUrl || "")
+  .split(",")
+  .map((u) => u.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (env.nodeEnv === "development" && isDevOrigin(origin)) {
+      if (!origin) return callback(null, true);
+      if (env.nodeEnv !== "production" && isDevOrigin(origin)) {
         return callback(null, true);
       }
-      if (origin === env.clientUrl || !origin) {
+      const cleanOrigin = origin.replace(/\/$/, "");
+      if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes("*")) {
+        return callback(null, true);
+      }
+      // Support Vercel deployment preview URLs if clientUrl contains vercel.app
+      if (allowedOrigins.some((ao) => ao.includes("vercel.app")) && cleanOrigin.endsWith(".vercel.app")) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "x-pharmacy-id"]
   })
 );
 
