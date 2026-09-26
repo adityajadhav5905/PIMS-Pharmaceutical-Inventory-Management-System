@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Check, Eye, EyeOff, Save } from 'lucide-react';
 import { api } from '../lib/api';
 
 export default function Settings() {
@@ -17,9 +17,15 @@ export default function Settings() {
     confirmPassword: ''
   });
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  // Notification preferences state
+  const [prefs, setPrefs] = useState({
+    emailNotifications: true,
+    inventoryAlerts: true,
+    weeklyReports: false
+  });
+  const [prefsLoading, setPrefsLoading] = useState(false);
+  const [prefsSuccess, setPrefsSuccess] = useState('');
+  const [prefsError, setPrefsError] = useState('');
 
   const loadProfile = async () => {
     setLoading(true);
@@ -41,6 +47,22 @@ export default function Settings() {
     }
   };
 
+  const loadPreferences = async () => {
+    try {
+      const response = await api.getPreferences();
+      if (response.success && response.data) {
+        setPrefs(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to load preferences:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+    loadPreferences();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -54,7 +76,6 @@ export default function Settings() {
     setError('');
     setSuccess('');
 
-    // Validate
     if (formData.newPassword !== formData.confirmPassword) {
       setError('New passwords do not match');
       return;
@@ -89,6 +110,24 @@ export default function Settings() {
     }
   };
 
+  const handlePrefChange = (key) => {
+    setPrefs(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSavePreferences = async () => {
+    setPrefsLoading(true);
+    setPrefsError('');
+    setPrefsSuccess('');
+    try {
+      await api.updatePreferences(prefs);
+      setPrefsSuccess('Preferences saved successfully.');
+    } catch (err) {
+      setPrefsError(err.message || 'Failed to save preferences.');
+    } finally {
+      setPrefsLoading(false);
+    }
+  };
+
   if (!profile && !loading) {
     return <div className="text-center py-8 text-gray-600">Loading profile...</div>;
   }
@@ -101,7 +140,7 @@ export default function Settings() {
         <p className="text-gray-600 dark:text-gray-400">Manage your account settings and preferences</p>
       </div>
 
-      {/* Messages */}
+      {/* Profile Messages */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3 dark:bg-red-950/20 dark:border-red-900/50">
           <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5 dark:text-red-400" />
@@ -265,40 +304,58 @@ export default function Settings() {
       </div>
 
       {/* Additional Settings */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6">
         {/* Preferences */}
         <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800 dark:border dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Preferences</h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-gray-700 dark:text-gray-300">Email Notifications</label>
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-gray-700 dark:text-gray-300">Inventory Alerts</label>
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-gray-700 dark:text-gray-300">Weekly Reports</label>
-              <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
-            </div>
-          </div>
-        </div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Notification Preferences</h2>
 
-        {/* Security */}
-        <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800 dark:border dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Security</h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900 dark:text-gray-200">Two-Factor Authentication</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Not enabled</p>
-              </div>
-              <button className="px-4 py-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
-                Enable
-              </button>
+          {/* Feedback messages */}
+          {prefsSuccess && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex gap-2 dark:bg-green-950/20 dark:border-green-900/50">
+              <Check className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-green-700 dark:text-green-400">{prefsSuccess}</p>
             </div>
+          )}
+          {prefsError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex gap-2 dark:bg-red-950/20 dark:border-red-900/50">
+              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 dark:text-red-400">{prefsError}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {[
+              { key: 'emailNotifications', label: 'Email Notifications', desc: 'Receive important alerts by email' },
+              { key: 'inventoryAlerts', label: 'Inventory Alerts', desc: 'Low stock and expiry notifications' },
+              { key: 'weeklyReports', label: 'Weekly Reports', desc: 'Weekly summary of pharmacy activity' },
+            ].map(({ key, label, desc }) => (
+              <label key={key} className="flex items-center justify-between cursor-pointer group">
+                <div>
+                  <p className="text-gray-700 dark:text-gray-300 font-medium">{label}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">{desc}</p>
+                </div>
+                <div
+                  onClick={() => handlePrefChange(key)}
+                  className={`relative w-10 h-6 rounded-full transition-colors cursor-pointer ${
+                    prefs[key] ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    prefs[key] ? 'translate-x-5' : 'translate-x-1'
+                  }`} />
+                </div>
+              </label>
+            ))}
           </div>
+
+          <button
+            onClick={handleSavePreferences}
+            disabled={prefsLoading}
+            className="mt-6 w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            <Save size={16} />
+            {prefsLoading ? 'Saving...' : 'Save Preferences'}
+          </button>
         </div>
       </div>
     </div>

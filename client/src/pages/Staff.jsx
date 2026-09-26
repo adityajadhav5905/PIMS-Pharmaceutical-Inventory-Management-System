@@ -22,10 +22,6 @@ export default function Staff() {
     status: 'Active'
   });
 
-  useEffect(() => {
-    loadStaff();
-  }, [page, search]);
-
   const loadStaff = async () => {
     setLoading(true);
     setError('');
@@ -38,6 +34,10 @@ export default function Staff() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadStaff();
+  }, [page, search]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

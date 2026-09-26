@@ -10,6 +10,7 @@ import ExportData from './pages/ExportData';
 import Staff from './pages/Staff';
 import Settings from './pages/Settings';
 import Help from './pages/Help';
+import SupportTickets from './pages/SupportTickets';
 import DashboardLayout from './components/DashboardLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -27,6 +28,8 @@ function App() {
       <Route path="/financials" element={<ProtectedRoute adminOnly><DashboardLayout><Financials /></DashboardLayout></ProtectedRoute>} />
       <Route path="/export" element={<ProtectedRoute adminOnly><DashboardLayout><ExportData /></DashboardLayout></ProtectedRoute>} />
       <Route path="/staff" element={<ProtectedRoute adminOnly><DashboardLayout><Staff /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/support-tickets" element={<ProtectedRoute adminOnly><DashboardLayout><SupportTickets /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/support" element={<Navigate to="/support-tickets" replace />} />
       <Route path="/settings" element={<ProtectedRoute><DashboardLayout><Settings /></DashboardLayout></ProtectedRoute>} />
       <Route path="/help" element={<ProtectedRoute><DashboardLayout><Help /></DashboardLayout></ProtectedRoute>} />
 

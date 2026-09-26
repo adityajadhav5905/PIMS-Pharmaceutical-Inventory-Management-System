@@ -7,6 +7,7 @@ import staffRoutes from "./staffRoutes.js";
 import dashboardRoutes from "./dashboardRoutes.js";
 import financialsRoutes from "./financialsRoutes.js";
 import exportRoutes from "./exportRoutes.js";
+import supportRoutes from "./supportRoutes.js";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use("/staff", staffRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/financials", financialsRoutes);
 router.use("/export", exportRoutes);
+router.use("/support", supportRoutes);
 
 export default router;

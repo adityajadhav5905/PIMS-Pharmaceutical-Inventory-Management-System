@@ -27,13 +27,15 @@ lerna-debug.log*
 # Environment files
 .env
 .env.*
+.env.local
 !.env.example
 
-# Local development
+# Local development & IDEs
 *.local
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
 *.swp
 *.swo
 *.suo
@@ -43,7 +45,11 @@ lerna-debug.log*
 
 # Python
 __pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*/*/*/__pycache__/
 *.py[cod]
+*$py.class
 .pytest_cache/
 .mypy_cache/
 .ipynb_checkpoints/
@@ -59,3 +65,4 @@ INTERVIEW_QUESTIONS.md
 POSTMAN_COLLECTION.json
 POSTMAN_TESTING_GUIDE.txt
 DATABASE_STRUCTURE.txt
+credentials.txt

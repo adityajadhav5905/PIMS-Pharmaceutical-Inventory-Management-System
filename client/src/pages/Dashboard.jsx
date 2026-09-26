@@ -9,10 +9,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
   const loadStats = async () => {
     setLoading(true);
     setError('');
@@ -25,6 +21,10 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
 
   if (loading) {
     return <p className="text-gray-500 dark:text-gray-400">Loading dashboard...</p>;

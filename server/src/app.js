@@ -7,6 +7,7 @@ import morgan from "morgan";
 import env from "./config/env.js";
 import routes from "./routes/index.js";
 import errorHandler from "./middlewares/errorHandler.js";
+import { tenantMiddleware } from "./middlewares/tenantMiddleware.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
+app.use(tenantMiddleware);
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 app.use("/api/v1", routes);

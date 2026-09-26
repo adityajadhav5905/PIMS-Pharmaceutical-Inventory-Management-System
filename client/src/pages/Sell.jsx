@@ -6,18 +6,16 @@ import { formatDate, formatINR } from '../lib/format';
 /** Sell / exit stock — deducts quantity and records profit. */
 export default function Sell() {
   const [stock, setStock] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [form, setForm] = useState({ inventoryId: '', quantity: '', note: '' });
+  const [form, setForm] = useState({ inventoryId: '', quantity: '', note: '', employeeId: '' });
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Autocomplete search states
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-
-  useEffect(() => {
-    loadStock();
-  }, []);
 
   const loadStock = async () => {
     setLoading(true);
@@ -31,6 +29,30 @@ export default function Sell() {
     }
   };
 
+  const loadEmployees = async () => {
+    try {
+      const res = await api.getStaffSales();
+      setEmployees(res.data);
+      
+      const loggedInUserStr = localStorage.getItem('user');
+      if (loggedInUserStr) {
+        const loggedInUser = JSON.parse(loggedInUserStr);
+        setIsAdmin(loggedInUser.role === 'Admin');
+        const matched = res.data.find(e => e.email === loggedInUser.email);
+        if (matched) {
+          setForm(prev => ({ ...prev, employeeId: matched._id }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load active employee list:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadStock();
+    loadEmployees();
+  }, []);
+
   const selected = stock.find((s) => s._id === form.inventoryId);
   const qty = Number(form.quantity) || 0;
   const estimatedProfit = selected
@@ -39,7 +61,7 @@ export default function Sell() {
   const estimatedRevenue = selected ? qty * (selected.medicine?.sellingPrice || 0) : 0;
 
   const resetForm = () => {
-    setForm({ inventoryId: '', quantity: '', note: '' });
+    setForm(prev => ({ ...prev, inventoryId: '', quantity: '', note: '' }));
     setSearchTerm('');
     setShowDropdown(false);
   };
@@ -64,6 +86,7 @@ export default function Sell() {
         inventoryId: form.inventoryId,
         quantity: Number(form.quantity),
         note: form.note,
+        employeeId: form.employeeId,
       });
       setSuccess(
         `Sale recorded! Profit: ${formatINR(res.data.profit)} · Remaining stock: ${res.data.remainingStock}`
@@ -179,6 +202,30 @@ export default function Sell() {
                 )}
               </div>
             </div>
+
+            {isAdmin && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Dispensed By (Employee) *
+                </label>
+                <select
+                  value={form.employeeId}
+                  onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                  required
+                >
+                  <option value="">Select dispensing employee...</option>
+                  {employees.map((emp) => (
+                    <option key={emp._id} value={emp._id}>
+                      {emp.name} ({emp.position} · {emp.department})
+                    </option>
+                  ))}
+                  {employees.length === 0 && (
+                    <option disabled value="">No active employees found. Please add staff first.</option>
+                  )}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">

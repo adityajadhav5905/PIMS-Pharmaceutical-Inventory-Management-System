@@ -17,7 +17,9 @@ export const requireAuth = (req, res, next) => {
 };
 
 export const requireRole = (roles) => (req, res, next) => {
-  if (!roles.includes(req.user.role)) {
+  const allowed = roles.map((r) => r.toLowerCase());
+  const userRole = (req.user?.role || "").toLowerCase();
+  if (!allowed.includes(userRole)) {
     return res.status(403).json({ success: false, message: "Forbidden" });
   }
   return next();

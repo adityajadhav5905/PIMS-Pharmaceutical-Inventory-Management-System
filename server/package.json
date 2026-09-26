@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "lint": "eslint ."
+    "seed": "node src/config/seed.js",
+    "lint": "eslint .",
+    "test": "node src/tests/integration.test.js",
+    "test:concurrency": "node src/tests/concurrency.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -18,7 +21,7 @@
     "helmet": "^7.1.0",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.5.2",
+    "mongoose": "^9.10.2",
     "morgan": "^1.10.0",
     "node-cron": "^3.0.3",
     "winston": "^3.13.1"

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, Edit2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatDate, formatINR } from '../lib/format';
@@ -19,10 +20,13 @@ const emptyForm = {
 
 /** Inventory management — add/edit batches with medicine details and INR pricing. */
 export default function Inventory() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSearch = searchParams.get('search') || '';
+
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -33,11 +37,6 @@ export default function Inventory() {
   const [availableStock, setAvailableStock] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [isExistingMedicine, setIsExistingMedicine] = useState(false);
-
-  useEffect(() => {
-    loadInventory();
-    loadMedicinesAndStock();
-  }, [page, search]);
 
   const loadInventory = async () => {
     setLoading(true);
@@ -65,6 +64,11 @@ export default function Inventory() {
       console.error('Failed to load autocomplete items:', err);
     }
   };
+
+  useEffect(() => {
+    loadInventory();
+    loadMedicinesAndStock();
+  }, [page, search]);
 
   /**
    * Pre-populates medicine metadata (brand, description, prices) and aggregates

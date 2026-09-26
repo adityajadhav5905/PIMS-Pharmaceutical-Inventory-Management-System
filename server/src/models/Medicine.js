@@ -1,19 +1,69 @@
 import mongoose from "mongoose";
 
-/** Medicine master record — name, brand, pricing used for profit on sales. */
 const medicineSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, index: true },
-    sku: { type: String, required: true, unique: true },
-    brand: { type: String, default: "" },
-    description: { type: String, default: "" },
-    category: String,
-    supplier: String,
-    buyingPrice: { type: Number, default: 0, min: 0 },
-    sellingPrice: { type: Number, default: 0, min: 0 },
-    leadTimeDays: { type: Number, default: 7 }
+    pharmacyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Pharmacy",
+      required: true,
+      index: true
+    },
+    sku: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true
+    },
+    brand: {
+      type: String,
+      default: ""
+    },
+    description: {
+      type: String,
+      default: ""
+    },
+    category: {
+      type: String,
+      default: "",
+      index: true
+    },
+    supplier: {
+      type: String,
+      default: ""
+    },
+    buyingPrice: {
+      type: Number,
+      required: true,
+      default: 0
+    },
+    sellingPrice: {
+      type: Number,
+      required: true,
+      default: 0
+    },
+    leadTimeDays: {
+      type: Number,
+      default: 7
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    deletedAt: {
+      type: Date,
+      default: null
+    }
   },
-  { timestamps: true }
+  {
+    timestamps: true
+  }
 );
 
-export default mongoose.model("Medicine", medicineSchema);
+medicineSchema.index({ pharmacyId: 1, sku: 1 }, { unique: true });
+
+export const Medicine = mongoose.model("Medicine", medicineSchema);

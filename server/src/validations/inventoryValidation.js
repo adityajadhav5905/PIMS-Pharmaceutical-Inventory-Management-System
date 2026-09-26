@@ -1,5 +1,7 @@
 import Joi from "joi";
 
+const idSchema = Joi.alternatives().try(Joi.number().integer(), Joi.string());
+
 export const medicineSchema = Joi.object({
   name: Joi.string().required(),
   sku: Joi.string().required(),
@@ -13,7 +15,7 @@ export const medicineSchema = Joi.object({
 });
 
 export const inventorySchema = Joi.object({
-  medicine: Joi.string().optional(),
+  medicine: idSchema.optional(),
   name: Joi.string().optional(),
   brand: Joi.string().allow("").optional(),
   description: Joi.string().allow("").optional(),
@@ -26,7 +28,7 @@ export const inventorySchema = Joi.object({
 }).or("medicine", "name");
 
 export const inventoryUpdateSchema = Joi.object({
-  medicine: Joi.string().optional(),
+  medicine: idSchema.optional(),
   name: Joi.string().optional(),
   brand: Joi.string().allow("").optional(),
   description: Joi.string().allow("").optional(),
@@ -39,21 +41,32 @@ export const inventoryUpdateSchema = Joi.object({
 }).min(1);
 
 export const sellSchema = Joi.object({
-  inventoryId: Joi.string().required(),
+  inventoryId: idSchema.required(),
   quantity: Joi.number().integer().min(1).required(),
-  note: Joi.string().allow("").optional()
+  note: Joi.string().allow("").optional(),
+  employeeId: idSchema.optional()
 });
 
 export const transactionSchema = Joi.object({
-  medicine: Joi.string().required(),
+  medicine: idSchema.optional(),
+  medicineId: idSchema.optional(),
+  inventoryId: idSchema.optional(),
   quantity: Joi.number().integer().min(1).required(),
   type: Joi.string().valid("IN", "OUT").required(),
+  unitBuyPrice: Joi.number().min(0).optional(),
+  unitSellPrice: Joi.number().min(0).optional(),
+  employeeId: idSchema.optional(),
   note: Joi.string().allow("").optional()
-});
+}).or("medicine", "medicineId");
 
 export const transactionUpdateSchema = Joi.object({
-  medicine: Joi.string().optional(),
+  medicine: idSchema.optional(),
+  medicineId: idSchema.optional(),
+  inventoryId: idSchema.optional(),
   quantity: Joi.number().integer().min(1).optional(),
   type: Joi.string().valid("IN", "OUT").optional(),
+  unitBuyPrice: Joi.number().min(0).optional(),
+  unitSellPrice: Joi.number().min(0).optional(),
+  employeeId: idSchema.optional(),
   note: Joi.string().allow("").optional()
 }).min(1);

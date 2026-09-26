@@ -2,6 +2,9 @@ import { Router } from "express";
 import {
   createInventoryBatch,
   createMedicine,
+  getMedicine,
+  updateMedicine,
+  deleteMedicine,
   createTransaction,
   deleteInventoryBatch,
   deleteTransaction,
@@ -27,7 +30,12 @@ import {
 const router = Router();
 
 router.get("/medicines", requireAuth, listMedicines);
+router.get("/medicines/:id", requireAuth, getMedicine);
 router.post("/medicines", requireAuth, requireRole(["Admin"]), validateBody(medicineSchema), createMedicine);
+router.put("/medicines/:id", requireAuth, requireRole(["Admin"]), updateMedicine);
+router.patch("/medicines/:id", requireAuth, requireRole(["Admin"]), updateMedicine);
+router.delete("/medicines/:id", requireAuth, requireRole(["Admin"]), deleteMedicine);
+
 router.get("/available", requireAuth, listAvailableStock);
 router.get("/", requireAuth, listInventory);
 router.post("/", requireAuth, requireRole(["Admin", "Pharmacist"]), validateBody(inventorySchema), createInventoryBatch);

@@ -1,318 +1,605 @@
-import Inventory from "../models/Inventory.js";
-import Medicine from "../models/Medicine.js";
-import Transaction from "../models/Transaction.js";
-import Staff from "../models/Staff.js";
-import mongoose from "mongoose";
+import { Medicine, Inventory, Transaction, Staff } from "../models/index.js";
+import { getPharmacyDbId } from "../utils/tenantContext.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { checkAlertsForBatch } from "../jobs/alertJob.js";
 
-/**
- * Helper function: Resolve a medicine by MongoDB ObjectId, OR find it by name, OR create a new Medicine document.
- * 
- * 1. If payload contains a valid 'medicine' ObjectId, verifies it exists and updates metadata if provided.
- * 2. If 'medicine' is not a valid ObjectId, searches by name (case-insensitive regular expression).
- * 3. If the medicine name is not found, creates a new Medicine record with a generated SKU.
- */
-const resolveOrCreateMedicine = async (payload) => {
-  if (payload.medicine && mongoose.Types.ObjectId.isValid(payload.medicine)) {
-    const existing = await Medicine.findById(payload.medicine);
-    if (!existing) throw new Error("Medicine not found");
+/** List all medicine catalog items. */
+export const getMedicines = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const medicines = await Medicine.find({ pharmacyId: pharmacyDbId, isActive: true }).sort({ name: 1 });
 
-    const updates = {};
-    if (payload.brand !== undefined) updates.brand = payload.brand;
-    if (payload.description !== undefined) updates.description = payload.description;
-    if (payload.buyingPrice !== undefined) updates.buyingPrice = payload.buyingPrice;
-    if (payload.sellingPrice !== undefined) updates.sellingPrice = payload.sellingPrice;
-    if (payload.name) updates.name = payload.name;
+  return res.json({
+    success: true,
+    data: medicines.map((m) => ({
+      _id: m._id,
+      id: m._id,
+      name: m.name,
+      sku: m.sku,
+      brand: m.brand,
+      description: m.description,
+      category: m.category,
+      supplier: m.supplier,
+      buyingPrice: m.buyingPrice,
+      sellingPrice: m.sellingPrice,
+      leadTimeDays: m.leadTimeDays,
+      createdAt: m.createdAt
+    }))
+  });
+});
 
-    if (Object.keys(updates).length) {
-      Object.assign(existing, updates);
-      await existing.save();
+/** Get single medicine by ID. */
+export const getMedicine = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const medicine = await Medicine.findOne({ _id: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (!medicine) {
+    return res.status(404).json({ success: false, message: "Medicine not found" });
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      _id: medicine._id,
+      id: medicine._id,
+      name: medicine.name,
+      sku: medicine.sku,
+      brand: medicine.brand,
+      description: medicine.description,
+      category: medicine.category,
+      supplier: medicine.supplier,
+      buyingPrice: medicine.buyingPrice,
+      sellingPrice: medicine.sellingPrice,
+      leadTimeDays: medicine.leadTimeDays,
+      createdAt: medicine.createdAt
     }
-    return existing._id;
+  });
+});
+
+/** Create a standalone Medicine record in the catalog. */
+export const createMedicine = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const { name, sku, brand, description, category, supplier, buyingPrice, sellingPrice, leadTimeDays } = req.body;
+
+  const existing = await Medicine.findOne({ pharmacyId: pharmacyDbId, sku });
+  if (existing) {
+    return res.status(400).json({ success: false, message: "A medicine with this SKU already exists." });
+  }
+
+  const medicine = await Medicine.create({
+    pharmacyId: pharmacyDbId,
+    name,
+    sku: sku || `MED-${Date.now()}`,
+    brand: brand || "",
+    description: description || "",
+    category: category || "",
+    supplier: supplier || "",
+    buyingPrice: Number(buyingPrice) || 0,
+    sellingPrice: Number(sellingPrice) || 0,
+    leadTimeDays: Number(leadTimeDays) || 7
+  });
+
+  return res.status(201).json({
+    success: true,
+    data: {
+      _id: medicine._id,
+      id: medicine._id,
+      name: medicine.name,
+      sku: medicine.sku,
+      brand: medicine.brand,
+      description: medicine.description,
+      category: medicine.category,
+      supplier: medicine.supplier,
+      buyingPrice: medicine.buyingPrice,
+      sellingPrice: medicine.sellingPrice,
+      leadTimeDays: medicine.leadTimeDays,
+      createdAt: medicine.createdAt
+    }
+  });
+});
+
+/** Update medicine catalog item. */
+export const updateMedicine = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const medicine = await Medicine.findOne({ _id: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (!medicine) {
+    return res.status(404).json({ success: false, message: "Medicine not found" });
+  }
+
+  const fields = ["name", "sku", "brand", "description", "category", "supplier", "buyingPrice", "sellingPrice", "leadTimeDays"];
+  for (const f of fields) {
+    if (req.body[f] !== undefined) {
+      medicine[f] = f.includes("Price") || f.includes("leadTime") ? Number(req.body[f]) : req.body[f];
+    }
+  }
+
+  await medicine.save();
+
+  return res.json({
+    success: true,
+    data: {
+      _id: medicine._id,
+      id: medicine._id,
+      name: medicine.name,
+      sku: medicine.sku,
+      brand: medicine.brand,
+      description: medicine.description,
+      category: medicine.category,
+      supplier: medicine.supplier,
+      buyingPrice: medicine.buyingPrice,
+      sellingPrice: medicine.sellingPrice,
+      leadTimeDays: medicine.leadTimeDays,
+      createdAt: medicine.createdAt
+    }
+  });
+});
+
+/** Delete medicine catalog item (checks if referenced by inventory). */
+export const deleteMedicine = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const batches = await Inventory.find({ medicineId: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (batches.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Cannot delete medicine that is referenced by active inventory batches. Delete batches first."
+    });
+  }
+
+  const medicine = await Medicine.findOneAndDelete({ _id: req.params.id, pharmacyId: pharmacyDbId });
+  if (!medicine) {
+    return res.status(404).json({ success: false, message: "Medicine not found" });
+  }
+
+  return res.json({ success: true, message: "Medicine deleted successfully" });
+});
+
+/** Helper to resolve or upsert medicine during batch creation. */
+const resolveMedicineId = async (payload, pharmacyDbId) => {
+  if (payload.medicine) {
+    const med = await Medicine.findOne({ _id: payload.medicine, pharmacyId: pharmacyDbId });
+    if (med) return med._id;
   }
 
   const name = (payload.name || payload.medicine || "").trim();
   if (!name) throw new Error("Medicine name is required");
 
-  // Perform case-insensitive name match to prevent creating duplicate medicines
-  let medicine = await Medicine.findOne({
-    name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }
-  });
-
-  if (medicine) {
-    if (payload.brand !== undefined) medicine.brand = payload.brand;
-    if (payload.description !== undefined) medicine.description = payload.description;
-    if (payload.buyingPrice !== undefined) medicine.buyingPrice = payload.buyingPrice;
-    if (payload.sellingPrice !== undefined) medicine.sellingPrice = payload.sellingPrice;
-    await medicine.save();
-    return medicine._id;
+  let med = await Medicine.findOne({ pharmacyId: pharmacyDbId, name: new RegExp(`^${name}$`, "i") });
+  if (med) {
+    if (payload.brand !== undefined) med.brand = payload.brand;
+    if (payload.description !== undefined) med.description = payload.description;
+    if (payload.buyingPrice !== undefined) med.buyingPrice = Number(payload.buyingPrice);
+    if (payload.sellingPrice !== undefined) med.sellingPrice = Number(payload.sellingPrice);
+    await med.save();
+    return med._id;
   }
 
-  // Create new medicine catalog entry if it doesn't exist
-  medicine = await Medicine.create({
+  med = await Medicine.create({
+    pharmacyId: pharmacyDbId,
     name,
     sku: `MED-${Date.now()}`,
     brand: payload.brand || "",
     description: payload.description || "",
-    buyingPrice: payload.buyingPrice || 0,
-    sellingPrice: payload.sellingPrice || 0
+    buyingPrice: Number(payload.buyingPrice) || 0,
+    sellingPrice: Number(payload.sellingPrice) || 0
   });
 
-  return medicine._id;
+  return med._id;
 };
 
-/** Create a standalone Medicine record in the catalog. */
-export const createMedicine = asyncHandler(async (req, res) => {
-  const medicine = await Medicine.create(req.body);
-  return res.status(201).json({ success: true, data: medicine });
-});
-
-/** List all medicine catalog items. */
-export const listMedicines = asyncHandler(async (req, res) => {
-  const medicines = await Medicine.find().sort({ name: 1 });
-  return res.json({ success: true, data: medicines });
-});
-
-/** List inventory batches with search filters, sorting, and pagination. */
-export const listInventory = asyncHandler(async (req, res) => {
+/** List inventory batches with search and pagination. */
+export const getInventory = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
   const page = Number(req.query.page || 1);
   const limit = Number(req.query.limit || 10);
-  const search = req.query.search?.trim() || "";
-  const sortBy = req.query.sortBy || "createdAt";
-  const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+  const search = req.query.search || "";
 
-  // Search by medicine name or brand
-  const medicineFilter = search
-    ? {
-        $or: [
-          { name: { $regex: search, $options: "i" } },
-          { brand: { $regex: search, $options: "i" } }
-        ]
-      }
-    : {};
-  const medicineIds = search
-    ? (await Medicine.find(medicineFilter).select("_id")).map((m) => m._id)
-    : null;
-  const filter = medicineIds ? { medicine: { $in: medicineIds } } : {};
+  let matchQuery = { pharmacyId: pharmacyDbId };
 
-  // Fetch paginated inventory rows and count total documents
-  const [rows, total] = await Promise.all([
-    Inventory.find(filter)
-      .populate("medicine")
-      .sort({ [sortBy]: sortOrder })
-      .skip((page - 1) * limit)
-      .limit(limit),
-    Inventory.countDocuments(filter)
-  ]);
+  if (search) {
+    const matchingMeds = await Medicine.find({
+      pharmacyId: pharmacyDbId,
+      $or: [
+        { name: { $regex: search, $options: "i" } },
+        { brand: { $regex: search, $options: "i" } }
+      ]
+    }).select("_id");
+
+    const medIds = matchingMeds.map((m) => m._id);
+    matchQuery.$or = [
+      { medicineId: { $in: medIds } },
+      { batchNumber: { $regex: search, $options: "i" } }
+    ];
+  }
+
+  const total = await Inventory.countDocuments(matchQuery);
+  const batches = await Inventory.find(matchQuery)
+    .populate("medicineId")
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  const formatted = batches.map((b) => ({
+    _id: b._id,
+    id: b._id,
+    batchNumber: b.batchNumber,
+    currentStock: b.currentStock,
+    reorderLevel: b.reorderLevel,
+    expiryDate: b.expiryDate,
+    createdAt: b.createdAt,
+    medicine: b.medicineId ? {
+      _id: b.medicineId._id,
+      id: b.medicineId._id,
+      name: b.medicineId.name,
+      brand: b.medicineId.brand,
+      description: b.medicineId.description,
+      buyingPrice: b.medicineId.buyingPrice,
+      sellingPrice: b.medicineId.sellingPrice
+    } : null
+  }));
 
   return res.json({
     success: true,
-    data: rows,
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    data: formatted,
+    pagination: {
+      total,
+      page,
+      pages: Math.ceil(total / limit)
+    }
   });
 });
 
-/** List inventory batches with stock level > 0 (used for the Sell page). */
-export const listAvailableStock = asyncHandler(async (req, res) => {
-  const rows = await Inventory.find({ currentStock: { $gt: 0 } })
-    .populate("medicine")
-    .sort({ expiryDate: 1 }); // Sort by expiryDate ascending (First-Expiring-First-Out strategy)
-  return res.json({ success: true, data: rows });
-});
+/** Create a new inventory batch. */
+export const createInventory = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const { batchNumber, currentStock, reorderLevel, expiryDate } = req.body;
 
-/** Create an inventory batch and log a corresponding stock IN transaction. */
-export const createInventoryBatch = asyncHandler(async (req, res) => {
-  const medicineId = await resolveOrCreateMedicine(req.body);
-  const row = await Inventory.create({
-    medicine: medicineId,
-    batchNumber: req.body.batchNumber,
-    currentStock: req.body.currentStock,
-    reorderLevel: req.body.reorderLevel ?? 20,
-    expiryDate: req.body.expiryDate
+  if (Number(currentStock) < 0) {
+    return res.status(400).json({ success: false, message: "Current stock cannot be negative." });
+  }
+
+  const medicineId = await resolveMedicineId(req.body, pharmacyDbId);
+
+  const batch = await Inventory.create({
+    pharmacyId: pharmacyDbId,
+    medicineId,
+    batchNumber,
+    currentStock: Number(currentStock) || 0,
+    reorderLevel: Number(reorderLevel) || 20,
+    expiryDate: new Date(expiryDate)
   });
 
-  const populated = await row.populate("medicine");
-
-  // Automatically log a "Stock added" IN transaction
-  await Transaction.create({
-    medicine: medicineId,
-    inventory: row._id,
-    quantity: req.body.currentStock,
-    type: "IN",
-    unitBuyPrice: populated.medicine.buyingPrice,
-    unitSellPrice: populated.medicine.sellingPrice,
-    totalCost: populated.medicine.buyingPrice * req.body.currentStock,
-    totalRevenue: 0,
-    profit: 0,
-    note: "Stock added"
-  });
-
-  // Instantly run stock/expiry checks to generate any immediate alerts if thresholds are pre-breached
-  await checkAlertsForBatch(row._id);
-
-  return res.status(201).json({ success: true, data: populated });
-});
-
-/** Update inventory batch details (stock level, reorder thresholds, or expiry dates). */
-export const updateInventoryBatch = asyncHandler(async (req, res) => {
-  const updates = { ...req.body };
-  delete updates.name;
-  delete updates.brand;
-  delete updates.description;
-  delete updates.buyingPrice;
-  delete updates.sellingPrice;
-
-  const batch = await Inventory.findById(req.params.id).populate("medicine");
-  if (!batch) return res.status(404).json({ success: false, message: "Inventory batch not found" });
-
-  // Update associated medicine details if medicine-specific properties are modified
-  if (req.body.name || req.body.brand || req.body.description || req.body.buyingPrice !== undefined || req.body.sellingPrice !== undefined) {
-    await resolveOrCreateMedicine({
-      medicine: batch.medicine._id,
-      name: req.body.name,
-      brand: req.body.brand,
-      description: req.body.description,
-      buyingPrice: req.body.buyingPrice,
-      sellingPrice: req.body.sellingPrice
+  // Record initial IN transaction
+  const medicine = await Medicine.findById(medicineId);
+  if (Number(currentStock) > 0 && medicine) {
+    await Transaction.create({
+      pharmacyId: pharmacyDbId,
+      medicineId,
+      inventoryId: batch._id,
+      type: "IN",
+      quantity: Number(currentStock),
+      unitBuyPrice: medicine.buyingPrice,
+      unitSellPrice: medicine.sellingPrice,
+      totalCost: medicine.buyingPrice * Number(currentStock),
+      totalRevenue: 0,
+      profit: 0,
+      note: "Initial stock batch creation"
     });
   }
 
-  Object.keys(updates).forEach((key) => {
-    if (updates[key] === undefined) delete updates[key];
-  });
-
-  const row = await Inventory.findByIdAndUpdate(req.params.id, updates, { new: true }).populate("medicine");
-
-  // Instantly run stock/expiry checks to update alerts based on changes
-  await checkAlertsForBatch(row._id);
-
-  return res.json({ success: true, data: row });
-});
-
-/** Delete an inventory batch. */
-export const deleteInventoryBatch = asyncHandler(async (req, res) => {
-  const row = await Inventory.findByIdAndDelete(req.params.id);
-  if (!row) return res.status(404).json({ success: false, message: "Inventory batch not found" });
-  return res.json({ success: true, message: "Inventory batch deleted" });
-});
-
-/**
- * Record a medicine sale.
- * 
- * 1. Checks that the selected batch exists and has enough stock.
- * 2. Deducts the stock from the inventory batch.
- * 3. Creates an OUT transaction, calculating buying cost, revenue, and profit.
- * 4. Finds the active Staff member matching the logged-in user's email and increments their totalSales.
- */
-export const sellStock = asyncHandler(async (req, res) => {
-  const batch = await Inventory.findById(req.body.inventoryId).populate("medicine");
-  if (!batch) return res.status(404).json({ success: false, message: "Batch not found" });
-
-  const qty = Number(req.body.quantity);
-  if (batch.currentStock < qty) {
-    return res.status(400).json({
-      success: false,
-      message: `Insufficient stock. Available: ${batch.currentStock}`
-    });
-  }
-
-  const buyPrice = batch.medicine.buyingPrice || 0;
-  const sellPrice = batch.medicine.sellingPrice || 0;
-  const totalCost = buyPrice * qty;
-  const totalRevenue = sellPrice * qty;
-  const profit = totalRevenue - totalCost;
-
-  // Deduct stock
-  batch.currentStock -= qty;
-  await batch.save();
-
-  // Create OUT transaction record
-  const tx = await Transaction.create({
-    medicine: batch.medicine._id,
-    inventory: batch._id,
-    quantity: qty,
-    type: "OUT",
-    unitBuyPrice: buyPrice,
-    unitSellPrice: sellPrice,
-    totalCost,
-    totalRevenue,
-    profit,
-    note: req.body.note || "Sale"
-  });
-
-  // Update staff performance total sales if the logged-in user has a corresponding active staff profile
-  if (req.user && req.user.email) {
-    await Staff.findOneAndUpdate(
-      { email: req.user.email, status: "Active" },
-      { $inc: { totalSales: totalRevenue } }
-    );
-  }
-
-  const populated = await tx.populate("medicine");
-
-  // Instantly run stock/expiry checks to generate low-stock warnings immediately on sale
+  // Trigger alert check
   await checkAlertsForBatch(batch._id);
 
   return res.status(201).json({
     success: true,
     data: {
-      transaction: populated,
-      remainingStock: batch.currentStock,
+      _id: batch._id,
+      id: batch._id,
+      batchNumber: batch.batchNumber,
+      currentStock: batch.currentStock,
+      reorderLevel: batch.reorderLevel,
+      expiryDate: batch.expiryDate,
+      medicine: medicine ? {
+        _id: medicine._id,
+        id: medicine._id,
+        name: medicine.name,
+        brand: medicine.brand,
+        buyingPrice: medicine.buyingPrice,
+        sellingPrice: medicine.sellingPrice
+      } : null
+    }
+  });
+});
+
+/** Update inventory batch. */
+export const updateInventory = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const batch = await Inventory.findOne({ _id: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (!batch) {
+    return res.status(404).json({ success: false, message: "Inventory batch not found" });
+  }
+
+  const { batchNumber, currentStock, reorderLevel, expiryDate } = req.body;
+  if (batchNumber !== undefined) batch.batchNumber = batchNumber;
+  if (currentStock !== undefined) batch.currentStock = Number(currentStock);
+  if (reorderLevel !== undefined) batch.reorderLevel = Number(reorderLevel);
+  if (expiryDate !== undefined) batch.expiryDate = new Date(expiryDate);
+
+  await batch.save();
+  await checkAlertsForBatch(batch._id);
+
+  return res.json({
+    success: true,
+    data: {
+      _id: batch._id,
+      id: batch._id,
+      batchNumber: batch.batchNumber,
+      currentStock: batch.currentStock,
+      reorderLevel: batch.reorderLevel,
+      expiryDate: batch.expiryDate
+    }
+  });
+});
+
+/** Delete inventory batch. */
+export const deleteInventory = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const batch = await Inventory.findOneAndDelete({ _id: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (!batch) {
+    return res.status(404).json({ success: false, message: "Inventory batch not found" });
+  }
+
+  return res.json({ success: true, message: "Inventory batch deleted successfully" });
+});
+
+/** Sell stock atomically with concurrency lock & expiry check. */
+export const sellStock = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const { inventoryId, quantity, employeeId, note } = req.body;
+  const qty = Number(quantity);
+
+  if (!qty || qty <= 0) {
+    return res.status(400).json({ success: false, message: "Quantity must be greater than 0" });
+  }
+
+  const batch = await Inventory.findOne({ _id: inventoryId, pharmacyId: pharmacyDbId }).populate("medicineId");
+  if (!batch) {
+    return res.status(404).json({ success: false, message: "Inventory batch not found" });
+  }
+
+  // Check expiry
+  if (new Date(batch.expiryDate) < new Date()) {
+    return res.status(400).json({ success: false, message: "Cannot sell expired stock." });
+  }
+
+  // Atomic decrement: only succeed if currentStock >= qty
+  const updatedBatch = await Inventory.findOneAndUpdate(
+    {
+      _id: inventoryId,
+      pharmacyId: pharmacyDbId,
+      currentStock: { $gte: qty }
+    },
+    {
+      $inc: { currentStock: -qty }
+    },
+    { new: true }
+  );
+
+  if (!updatedBatch) {
+    return res.status(400).json({
+      success: false,
+      message: `Insufficient stock. Available: ${batch.currentStock}.`
+    });
+  }
+
+  const medicine = batch.medicineId;
+  const unitBuy = medicine?.buyingPrice || 0;
+  const unitSell = medicine?.sellingPrice || 0;
+  const totalCost = unitBuy * qty;
+  const totalRevenue = unitSell * qty;
+  const profit = totalRevenue - totalCost;
+
+  // Create Transaction
+  const transaction = await Transaction.create({
+    pharmacyId: pharmacyDbId,
+    medicineId: medicine?._id,
+    inventoryId: updatedBatch._id,
+    type: "OUT",
+    quantity: qty,
+    unitBuyPrice: unitBuy,
+    unitSellPrice: unitSell,
+    totalCost,
+    totalRevenue,
+    profit,
+    employeeId: employeeId || null,
+    note: note || ""
+  });
+
+  // Update staff total sales if employeeId provided
+  if (employeeId) {
+    await Staff.findByIdAndUpdate(employeeId, { $inc: { totalSales: totalRevenue } });
+  }
+
+  // Evaluate alerts after stock decrement
+  await checkAlertsForBatch(updatedBatch._id);
+
+  return res.status(201).json({
+    success: true,
+    message: "Sale completed successfully",
+    data: {
+      transactionId: transaction._id,
+      remainingStock: updatedBatch.currentStock,
+      totalRevenue,
       profit
     }
   });
 });
 
-/** List and filter transactions with pagination. */
-export const listTransactions = asyncHandler(async (req, res) => {
-  const page = Number(req.query.page || 1);
-  const limit = Number(req.query.limit || 10);
-  const type = req.query.type || "";
-  const search = req.query.search?.trim() || "";
-  const sortBy = req.query.sortBy || "createdAt";
-  const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
-
-  const medicineFilter = search ? { name: { $regex: search, $options: "i" } } : {};
-  const medicineIds = search ? (await Medicine.find(medicineFilter).select("_id")).map((m) => m._id) : null;
-  const filter = {
-    ...(type ? { type } : {}),
-    ...(medicineIds ? { medicine: { $in: medicineIds } } : {})
-  };
-
-  const [rows, total] = await Promise.all([
-    Transaction.find(filter)
-      .populate("medicine")
-      .sort({ [sortBy]: sortOrder })
-      .skip((page - 1) * limit)
-      .limit(limit),
-    Transaction.countDocuments(filter)
-  ]);
+/** List available stock batches for sale (currentStock > 0 & not expired). */
+export const getAvailableStock = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const batches = await Inventory.find({
+    pharmacyId: pharmacyDbId,
+    currentStock: { $gt: 0 },
+    expiryDate: { $gte: new Date() }
+  }).populate("medicineId").sort({ expiryDate: 1 });
 
   return res.json({
     success: true,
-    data: rows,
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    data: batches.map((b) => ({
+      _id: b._id,
+      id: b._id,
+      batchNumber: b.batchNumber,
+      currentStock: b.currentStock,
+      expiryDate: b.expiryDate,
+      medicine: b.medicineId ? {
+        _id: b.medicineId._id,
+        id: b.medicineId._id,
+        name: b.medicineId.name,
+        brand: b.medicineId.brand,
+        sellingPrice: b.medicineId.sellingPrice
+      } : null
+    }))
   });
 });
 
-/** Create a standalone Transaction (direct ledger entry). */
+/** List transactions history. */
+export const getTransactions = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+  const page = Number(req.query.page || 1);
+  const limit = Number(req.query.limit || 20);
+
+  const total = await Transaction.countDocuments({ pharmacyId: pharmacyDbId });
+  const transactions = await Transaction.find({ pharmacyId: pharmacyDbId })
+    .populate("medicineId")
+    .populate("employeeId")
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  return res.json({
+    success: true,
+    data: transactions.map((t) => ({
+      _id: t._id,
+      id: t._id,
+      type: t.type,
+      quantity: t.quantity,
+      unitBuyPrice: t.unitBuyPrice,
+      unitSellPrice: t.unitSellPrice,
+      totalCost: t.totalCost,
+      totalRevenue: t.totalRevenue,
+      profit: t.profit,
+      note: t.note,
+      createdAt: t.createdAt,
+      medicine: t.medicineId ? {
+        _id: t.medicineId._id,
+        name: t.medicineId.name,
+        brand: t.medicineId.brand
+      } : null,
+      employee: t.employeeId ? {
+        _id: t.employeeId._id,
+        name: t.employeeId.name
+      } : null
+    })),
+    pagination: { total, page, pages: Math.ceil(total / limit) }
+  });
+});
+
+/** Create a manual transaction record. */
 export const createTransaction = asyncHandler(async (req, res) => {
-  const tx = await Transaction.create(req.body);
-  return res.status(201).json({ success: true, data: tx });
+  const pharmacyDbId = getPharmacyDbId();
+  const { medicine, medicineId, inventoryId, type, quantity, unitBuyPrice, unitSellPrice, employeeId, note } = req.body;
+
+  const targetMedicineId = medicineId || medicine;
+  if (!targetMedicineId) {
+    return res.status(400).json({ success: false, message: "Medicine ID is required." });
+  }
+
+  const med = await Medicine.findOne({ _id: targetMedicineId, pharmacyId: pharmacyDbId });
+  if (!med) {
+    return res.status(404).json({ success: false, message: "Medicine not found." });
+  }
+
+  const qty = Number(quantity);
+  const buy = unitBuyPrice !== undefined ? Number(unitBuyPrice) : (med.buyingPrice || 0);
+  const sell = unitSellPrice !== undefined ? Number(unitSellPrice) : (med.sellingPrice || 0);
+  const totalCost = buy * qty;
+  const totalRevenue = sell * qty;
+  const profit = totalRevenue - totalCost;
+
+  const transaction = await Transaction.create({
+    pharmacyId: pharmacyDbId,
+    medicineId: med._id,
+    inventoryId: inventoryId || null,
+    type,
+    quantity: qty,
+    unitBuyPrice: buy,
+    unitSellPrice: sell,
+    totalCost,
+    totalRevenue,
+    profit,
+    employeeId: employeeId || null,
+    note: note || ""
+  });
+
+  return res.status(201).json({
+    success: true,
+    data: transaction
+  });
 });
 
-/** Update an existing Transaction. */
+/** Update transaction record. */
 export const updateTransaction = asyncHandler(async (req, res) => {
-  const tx = await Transaction.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!tx) return res.status(404).json({ success: false, message: "Transaction not found" });
-  return res.json({ success: true, data: tx });
+  const pharmacyDbId = getPharmacyDbId();
+  const transaction = await Transaction.findOne({ _id: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (!transaction) {
+    return res.status(404).json({ success: false, message: "Transaction not found" });
+  }
+
+  const { medicine, medicineId, quantity, type, unitBuyPrice, unitSellPrice, note } = req.body;
+
+  if (medicineId || medicine) {
+    const med = await Medicine.findOne({ _id: medicineId || medicine, pharmacyId: pharmacyDbId });
+    if (med) transaction.medicineId = med._id;
+  }
+  if (quantity !== undefined) transaction.quantity = Number(quantity);
+  if (type !== undefined) transaction.type = type;
+  if (unitBuyPrice !== undefined) transaction.unitBuyPrice = Number(unitBuyPrice);
+  if (unitSellPrice !== undefined) transaction.unitSellPrice = Number(unitSellPrice);
+  if (note !== undefined) transaction.note = note;
+
+  transaction.totalCost = transaction.unitBuyPrice * transaction.quantity;
+  transaction.totalRevenue = transaction.unitSellPrice * transaction.quantity;
+  transaction.profit = transaction.totalRevenue - transaction.totalCost;
+
+  await transaction.save();
+
+  return res.json({
+    success: true,
+    data: transaction
+  });
 });
 
-/** Delete a Transaction. */
+/** Delete transaction record. */
 export const deleteTransaction = asyncHandler(async (req, res) => {
-  const tx = await Transaction.findByIdAndDelete(req.params.id);
-  if (!tx) return res.status(404).json({ success: false, message: "Transaction not found" });
-  return res.json({ success: true, message: "Transaction deleted" });
+  const pharmacyDbId = getPharmacyDbId();
+  const transaction = await Transaction.findOneAndDelete({ _id: req.params.id, pharmacyId: pharmacyDbId });
+
+  if (!transaction) {
+    return res.status(404).json({ success: false, message: "Transaction not found" });
+  }
+
+  return res.json({ success: true, message: "Transaction deleted successfully" });
 });
 
+// Named aliases for route compatibility
+export const listMedicines = getMedicines;
+export const listInventory = getInventory;
+export const createInventoryBatch = createInventory;
+export const updateInventoryBatch = updateInventory;
+export const deleteInventoryBatch = deleteInventory;
+export const listAvailableStock = getAvailableStock;
+export const listTransactions = getTransactions;

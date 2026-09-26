@@ -12,6 +12,7 @@ import {
   IndianRupee,
   Download,
   Users,
+  LifeBuoy,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -27,6 +28,7 @@ const secondaryNavigation = [
   { name: 'Financials', href: '/financials', icon: IndianRupee },
   { name: 'Export Data', href: '/export', icon: Download },
   { name: 'Staff', href: '/staff', icon: Users },
+  { name: 'Support Tickets', href: '/support-tickets', icon: LifeBuoy },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ];
@@ -106,8 +108,8 @@ export default function Sidebar({ open, onClose }) {
              {secondaryNavigation
                .filter((item) => {
                  if (user?.role !== 'Admin') {
-                   // Hide Financials, Export Data, and Staff from non-admins
-                   return !['Financials', 'Export Data', 'Staff'].includes(item.name);
+                   // Hide Financials, Export Data, Staff, and Support Tickets from non-admins
+                   return !['Financials', 'Export Data', 'Staff', 'Support Tickets'].includes(item.name);
                  }
                  return true;
                })

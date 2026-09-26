@@ -1,5 +1,6 @@
-import Inventory from "../models/Inventory.js";
-import Transaction from "../models/Transaction.js";
+import { Transaction, Inventory, Staff } from "../models/index.js";
+import { getPharmacyDbId } from "../utils/tenantContext.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 const csvEscape = (value) => {
   const str = String(value ?? "");
@@ -16,88 +17,149 @@ const toCsv = (headers, rows) => {
 };
 
 /** Download all sale/stock transactions as CSV. */
-export const exportTransactionsCsv = async (req, res) => {
-  try {
-    const transactions = await Transaction.find()
-      .populate("medicine")
-      .sort({ createdAt: -1 });
+export const exportTransactionsCsv = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
 
-    const headers = [
-      "Date",
-      "Type",
-      "Medicine",
-      "Brand",
-      "Quantity",
-      "Unit Buy Price (INR)",
-      "Unit Sell Price (INR)",
-      "Total Cost (INR)",
-      "Total Revenue (INR)",
-      "Profit (INR)",
-      "Note"
-    ];
+  const transactions = await Transaction.find({ pharmacyId: pharmacyDbId })
+    .populate("medicineId")
+    .sort({ createdAt: -1 });
 
-    const rows = transactions.map((tx) => [
-      new Date(tx.createdAt).toISOString(),
-      tx.type,
-      tx.medicine?.name || "",
-      tx.medicine?.brand || "",
-      tx.quantity,
-      tx.unitBuyPrice,
-      tx.unitSellPrice,
-      tx.totalCost,
-      tx.totalRevenue,
-      tx.profit,
-      tx.note || ""
-    ]);
+  const headers = [
+    "Date",
+    "Type",
+    "Medicine",
+    "Brand",
+    "Quantity",
+    "Unit Buy Price (INR)",
+    "Unit Sell Price (INR)",
+    "Total Cost (INR)",
+    "Total Revenue (INR)",
+    "Profit (INR)",
+    "Note"
+  ];
 
-    const csv = toCsv(headers, rows);
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", 'attachment; filename="all-transactions.csv"');
-    return res.send(csv);
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
+  const rows = transactions.map((tx) => [
+    new Date(tx.createdAt).toISOString(),
+    tx.type,
+    tx.medicineId?.name || "",
+    tx.medicineId?.brand || "",
+    tx.quantity,
+    Number(tx.unitBuyPrice),
+    Number(tx.unitSellPrice),
+    Number(tx.totalCost),
+    Number(tx.totalRevenue),
+    Number(tx.profit),
+    tx.note || ""
+  ]);
+
+  const csv = toCsv(headers, rows);
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="all-transactions.csv"');
+  return res.send(csv);
+});
 
 /** Download current stock snapshot as CSV. */
-export const exportStockCsv = async (req, res) => {
-  try {
-    const batches = await Inventory.find().populate("medicine").sort({ createdAt: -1 });
+export const exportStockCsv = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
 
-    const headers = [
-      "Medicine",
-      "Brand",
-      "Description",
-      "Batch Number",
-      "Current Stock",
-      "Reorder Level",
-      "Expiry Date",
-      "Buying Price (INR)",
-      "Selling Price (INR)",
-      "Stock Value (INR)"
+  const batches = await Inventory.find({ pharmacyId: pharmacyDbId })
+    .populate("medicineId")
+    .sort({ createdAt: -1 });
+
+  const headers = [
+    "Medicine",
+    "Brand",
+    "Description",
+    "Batch Number",
+    "Current Stock",
+    "Reorder Level",
+    "Expiry Date",
+    "Buying Price (INR)",
+    "Selling Price (INR)",
+    "Stock Value (INR)"
+  ];
+
+  const rows = batches.map((b) => {
+    const buy = Number(b.medicineId?.buyingPrice) || 0;
+    const sell = Number(b.medicineId?.sellingPrice) || 0;
+    const expiryString = b.expiryDate ? new Date(b.expiryDate).toISOString().split("T")[0] : "";
+    return [
+      b.medicineId?.name || "",
+      b.medicineId?.brand || "",
+      b.medicineId?.description || "",
+      b.batchNumber,
+      b.currentStock,
+      b.reorderLevel,
+      expiryString,
+      buy,
+      sell,
+      buy * b.currentStock
     ];
+  });
 
-    const rows = batches.map((b) => {
-      const buy = b.medicine?.buyingPrice || 0;
-      return [
-        b.medicine?.name || "",
-        b.medicine?.brand || "",
-        b.medicine?.description || "",
-        b.batchNumber,
-        b.currentStock,
-        b.reorderLevel,
-        new Date(b.expiryDate).toISOString().split("T")[0],
-        buy,
-        b.medicine?.sellingPrice || 0,
-        buy * b.currentStock
-      ];
-    });
+  const csv = toCsv(headers, rows);
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="current-stock.csv"');
+  return res.send(csv);
+});
 
-    const csv = toCsv(headers, rows);
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", 'attachment; filename="current-stock.csv"');
-    return res.send(csv);
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
+/** Download employee sales performance as CSV. */
+export const exportStaffPerformanceCsv = asyncHandler(async (req, res) => {
+  const pharmacyDbId = getPharmacyDbId();
+
+  const performance = await Transaction.aggregate([
+    {
+      $match: {
+        pharmacyId: pharmacyDbId,
+        type: "OUT",
+        employeeId: { $ne: null }
+      }
+    },
+    {
+      $group: {
+        _id: "$employeeId",
+        salesCount: { $sum: 1 },
+        totalRevenue: { $sum: "$totalRevenue" },
+        totalProfit: { $sum: "$profit" }
+      }
+    }
+  ]);
+
+  const activeStaff = await Staff.find({ pharmacyId: pharmacyDbId, status: "Active" });
+  const perfMap = new Map();
+  performance.forEach((p) => perfMap.set(p._id.toString(), p));
+
+  const rows = activeStaff.map((staff) => {
+    const idStr = staff._id.toString();
+    const salesCount = perfMap.has(idStr) ? perfMap.get(idStr).salesCount : 0;
+    const totalRevenue = perfMap.has(idStr) ? Number(perfMap.get(idStr).totalRevenue) : 0;
+    const totalProfit = perfMap.has(idStr) ? Number(perfMap.get(idStr).totalProfit) : 0;
+
+    return [
+      staff.name,
+      staff.email || "",
+      staff.position,
+      staff.department || "",
+      staff.status,
+      salesCount,
+      totalRevenue,
+      totalProfit
+    ];
+  });
+
+  const headers = [
+    "Name",
+    "Email",
+    "Position",
+    "Department",
+    "Status",
+    "Sales Count",
+    "Total Sales (INR)",
+    "Total Profit (INR)"
+  ];
+
+  const csv = toCsv(headers, rows);
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="employee-performance.csv"');
+  return res.send(csv);
+});
