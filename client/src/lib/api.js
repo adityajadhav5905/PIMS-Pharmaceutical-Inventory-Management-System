@@ -168,17 +168,29 @@ const downloadCsv = async (endpoint, filename) => {
 };
 
 export const api = {
-  // Auth
+  // Auth & OTP
   login: (email, password, pharmacyId) =>
     apiCall('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, pharmacyId }),
     }),
 
-  register: (name, email, password, pharmacyId) =>
+  sendRegistrationOtp: (email, pharmacyId, name) =>
+    apiCall('/auth/send-registration-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, pharmacyId, name }),
+    }),
+
+  register: (name, email, password, pharmacyId, otp) =>
     apiCall('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, pharmacyId }),
+      body: JSON.stringify({ name, email, password, pharmacyId, otp }),
+    }),
+
+  sendSettingsOtp: (action = 'SETTINGS_UPDATE') =>
+    apiCall('/auth/send-settings-otp', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
     }),
 
   logout: () => {
@@ -280,6 +292,12 @@ export const api = {
   getStaff: (page = 1, limit = 10, search = '') =>
     apiCall(`/staff?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`),
 
+  sendStaffOtp: (action = 'create', staffName = '', staffId = '') =>
+    apiCall('/staff/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ action, staffName, staffId }),
+    }),
+
   createStaff: (data) =>
     apiCall('/staff', {
       method: 'POST',
@@ -292,7 +310,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  deleteStaff: (id) => apiCall(`/staff/${id}`, { method: 'DELETE' }),
+  deleteStaff: (id, otp) =>
+    apiCall(`/staff/${id}${otp ? `?otp=${encodeURIComponent(otp)}` : ''}`, {
+      method: 'DELETE',
+      body: otp ? JSON.stringify({ otp }) : undefined,
+    }),
 
   getStaffSales: () => apiCall('/staff/sales'),
 

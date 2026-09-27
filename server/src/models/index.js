@@ -8,3 +8,4 @@ export { Alert } from "./Alert.js";
 export { Prediction } from "./Prediction.js";
 export { UserPreference } from "./UserPreference.js";
 export { SupportTicket } from "./SupportTicket.js";
+export { Otp } from "./Otp.js";

@@ -119,14 +119,17 @@ The React app will be available at **http://localhost:5173**.
 ## Running Tests
 
 ```bash
-# Integration QA suite
-node server/src/tests/integration.test.js
+# Run entire integration test suite
+npm test
+
+# Run OTP & Credential generation verification suite
+npm run test:otp --prefix server
 
 # ML demand forecasting suite
 node server/src/tests/forecasting_integration.test.js
 
 # Atomic inventory concurrency suite
-node server/src/tests/concurrency.test.js
+npm run test:concurrency --prefix server
 ```
 
 ---
@@ -136,8 +139,9 @@ node server/src/tests/concurrency.test.js
 Managed automatically via Mongoose:
 - `pharmacies` – Multi-tenant registry
 - `users` – User accounts per pharmacy workspace
-- `staff` – Employee directory and sales tracking
-- `medicines` – Medicine catalog
+- `staff` – Employee directory, roles, and sales tracking
+- `otps` – Bcrypt-hashed purpose-based verification tokens with 5-minute TTL
+- `medicines` – Medicine catalog and ATC category mapping
 - `inventories` – Stock batches with expiry tracking
 - `transactions` – Sales and stock-in ledger
 - `alerts` – LOW_STOCK, OVERSTOCK, and EXPIRY_WARNING notifications

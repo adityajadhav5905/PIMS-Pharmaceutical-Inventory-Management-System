@@ -158,7 +158,13 @@ export const deleteMedicine = asyncHandler(async (req, res) => {
 const resolveMedicineId = async (payload, pharmacyDbId) => {
   if (payload.medicine) {
     const med = await Medicine.findOne({ _id: payload.medicine, pharmacyId: pharmacyDbId });
-    if (med) return med._id;
+    if (med) {
+      if (payload.category !== undefined) {
+        med.category = payload.category;
+        await med.save();
+      }
+      return med._id;
+    }
   }
 
   const name = (payload.name || payload.medicine || "").trim();
@@ -168,6 +174,7 @@ const resolveMedicineId = async (payload, pharmacyDbId) => {
   if (med) {
     if (payload.brand !== undefined) med.brand = payload.brand;
     if (payload.description !== undefined) med.description = payload.description;
+    if (payload.category !== undefined) med.category = payload.category;
     if (payload.buyingPrice !== undefined) med.buyingPrice = Number(payload.buyingPrice);
     if (payload.sellingPrice !== undefined) med.sellingPrice = Number(payload.sellingPrice);
     await med.save();
@@ -180,6 +187,7 @@ const resolveMedicineId = async (payload, pharmacyDbId) => {
     sku: `MED-${Date.now()}`,
     brand: payload.brand || "",
     description: payload.description || "",
+    category: payload.category || "",
     buyingPrice: Number(payload.buyingPrice) || 0,
     sellingPrice: Number(payload.sellingPrice) || 0
   });
@@ -201,7 +209,8 @@ export const getInventory = asyncHandler(async (req, res) => {
       pharmacyId: pharmacyDbId,
       $or: [
         { name: { $regex: search, $options: "i" } },
-        { brand: { $regex: search, $options: "i" } }
+        { brand: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } }
       ]
     }).select("_id");
 
@@ -232,6 +241,7 @@ export const getInventory = asyncHandler(async (req, res) => {
       id: b.medicineId._id,
       name: b.medicineId.name,
       brand: b.medicineId.brand,
+      category: b.medicineId.category || "",
       description: b.medicineId.description,
       buyingPrice: b.medicineId.buyingPrice,
       sellingPrice: b.medicineId.sellingPrice

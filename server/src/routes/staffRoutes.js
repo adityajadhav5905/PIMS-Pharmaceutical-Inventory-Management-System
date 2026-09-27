@@ -1,16 +1,18 @@
 import { Router } from "express";
 import {
-    listStaff,
-    getStaff,
-    createStaff,
-    updateStaff,
-    deleteStaff,
-    getStaffSales
+  listStaff,
+  getStaff,
+  createStaff,
+  updateStaff,
+  deleteStaff,
+  getStaffSales,
+  sendStaffOtp
 } from "../controllers/staffController.js";
 import { requireAuth, requireRole } from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
+router.post("/send-otp", requireAuth, requireRole(["Admin"]), sendStaffOtp);
 router.get("/", requireAuth, requireRole(["Admin"]), listStaff);
 router.get("/sales", requireAuth, requireRole(["Admin"]), getStaffSales);
 router.get("/:id", requireAuth, requireRole(["Admin"]), getStaff);

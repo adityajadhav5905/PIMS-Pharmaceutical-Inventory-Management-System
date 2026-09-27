@@ -5,7 +5,10 @@
   "scripts": {
     "prestart": "node scripts/kill-ports.js",
     "start": "concurrently --kill-others-on-fail --prefix \"[{name}]\" --names \"server,client,ml\" --prefix-colors \"blue,green,magenta\" \"npm run dev --prefix server\" \"npm run dev --prefix client\" \"node scripts/start-ml.js\"",
-    "stop": "node scripts/kill-ports.js"
+    "stop": "node scripts/kill-ports.js",
+    "build": "npm run build --prefix client",
+    "test": "npm test --prefix server",
+    "seed": "npm run seed --prefix server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

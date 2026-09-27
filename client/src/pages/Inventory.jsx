@@ -5,9 +5,22 @@ import { api } from '../lib/api';
 import { formatDate, formatINR } from '../lib/format';
 import Modal from '../components/Modal';
 
+export const MEDICINE_CATEGORIES = [
+  { value: 'M01AB', label: 'M01AB - Anti-inflammatory and antirheumatic products, non-steroids, Acetic acid derivatives' },
+  { value: 'M01AE', label: 'M01AE - Anti-inflammatory and antirheumatic products, non-steroids, Propionic acid derivatives' },
+  { value: 'N02BA', label: 'N02BA - Other analgesics and antipyretics, Salicylic acid and derivatives' },
+  { value: 'N02BE', label: 'N02BE - Other analgesics and antipyretics, Pyrazolones and Anilides' },
+  { value: 'N05B', label: 'N05B - Psycholeptics drugs, Anxiolytic drugs' },
+  { value: 'N05C', label: 'N05C - Psycholeptics drugs, Hypnotics and sedatives drugs' },
+  { value: 'R03', label: 'R03 - Drugs for obstructive airway diseases' },
+  { value: 'R06', label: 'R06 - Antihistamines for systemic use' },
+  { value: 'OTHER', label: 'OTHER - Other / General Medicines (No AI Forecast Available)' },
+];
+
 const emptyForm = {
   name: '',
   brand: '',
+  category: 'N02BE',
   description: '',
   buyingPrice: '',
   sellingPrice: '',
@@ -71,11 +84,10 @@ export default function Inventory() {
   }, [page, search]);
 
   /**
-   * Pre-populates medicine metadata (brand, description, prices) and aggregates
+   * Pre-populates medicine metadata (brand, description, category, prices) and aggregates
    * its total current stock across all active batches.
    */
   const handleSelectMedicine = (medicine) => {
-    // Sum stock of this medicine across all batches
     const totalStock = availableStock
       .filter((item) => item.medicine?._id === medicine._id)
       .reduce((sum, item) => sum + (item.currentStock || 0), 0);
@@ -84,13 +96,14 @@ export default function Inventory() {
       ...formData,
       name: medicine.name,
       brand: medicine.brand || '',
+      category: medicine.category || 'N02BE',
       description: medicine.description || '',
       buyingPrice: medicine.buyingPrice ?? '',
       sellingPrice: medicine.sellingPrice ?? '',
-      currentStock: totalStock, // Preload current total stock count
+      currentStock: totalStock,
       newStock: '',
     });
-    setIsExistingMedicine(true); // selected an already present medicine
+    setIsExistingMedicine(true);
     setSuggestions([]);
   };
 
@@ -118,7 +131,7 @@ export default function Inventory() {
       }
       resetForm();
       loadInventory();
-      loadMedicinesAndStock(); // Refresh catalog and stock for autocomplete updates
+      loadMedicinesAndStock();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -144,6 +157,7 @@ export default function Inventory() {
     setFormData({
       name: item.medicine?.name || '',
       brand: item.medicine?.brand || '',
+      category: item.medicine?.category || 'N02BE',
       description: item.medicine?.description || '',
       buyingPrice: item.medicine?.buyingPrice ?? '',
       sellingPrice: item.medicine?.sellingPrice ?? '',
@@ -167,7 +181,7 @@ export default function Inventory() {
   };
 
   const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100';
+    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500';
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,12 +189,12 @@ export default function Inventory() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Medicine Inventory</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Add stock with drug name, brand, description, and INR pricing.
+            Manage medicine stock batches, categories, and INR pricing.
           </p>
         </div>
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition"
         >
           <Plus size={20} /> Add Stock
         </button>
@@ -189,7 +203,7 @@ export default function Inventory() {
       <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
         <input
           type="text"
-          placeholder="Search by medicine or brand..."
+          placeholder="Search by medicine, brand, or category..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className={inputClass}
@@ -222,7 +236,7 @@ export default function Inventory() {
                     onChange={(e) => {
                       const val = e.target.value;
                       setFormData({ ...formData, name: val });
-                      setIsExistingMedicine(false); // Reset preloaded flags if they type manually
+                      setIsExistingMedicine(false);
                       if (!val.trim()) {
                         setSuggestions([]);
                       } else {
@@ -241,7 +255,6 @@ export default function Inventory() {
                       }
                     }}
                     onBlur={() => {
-                      // Slight delay to allow clicked suggestion to register first
                       setTimeout(() => setSuggestions([]), 200);
                     }}
                     className={inputClass}
@@ -258,13 +271,14 @@ export default function Inventory() {
                           onMouseDown={() => handleSelectMedicine(m)}
                           className="px-4 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer text-gray-900 dark:text-gray-100 border-b border-gray-100 dark:border-gray-700 text-sm"
                         >
-                          <span className="font-semibold">{m.name}</span> {m.brand ? `(${m.brand})` : ''}
+                          <span className="font-semibold">{m.name}</span> {m.brand ? `(${m.brand})` : ''} - <span className="text-xs text-gray-500">{m.category || 'General'}</span>
                         </li>
                       ))}
                     </ul>
                   )}
                 </div>
               </div>
+
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Brand
@@ -273,21 +287,43 @@ export default function Inventory() {
                   type="text"
                   value={formData.brand}
                   onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  placeholder="e.g. Cipla, Sun Pharma, Abbott"
                   className={inputClass}
                 />
               </div>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Description
-              </label>
-              <textarea
-                rows={2}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className={inputClass}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Category *
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className={inputClass}
+                  required
+                >
+                  {MEDICINE_CATEGORIES.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="e.g. 500mg tablets, syrup, strip of 10"
+                  className={inputClass}
+                />
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -330,6 +366,7 @@ export default function Inventory() {
                   type="text"
                   value={formData.batchNumber}
                   onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
+                  placeholder="e.g. BATCH-2026-01"
                   className={inputClass}
                   required
                 />
@@ -405,7 +442,7 @@ export default function Inventory() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50 transition"
               >
                 {loading ? 'Saving...' : 'Save'}
               </button>
@@ -419,6 +456,7 @@ export default function Inventory() {
           <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">Medicine</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">Category</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">Brand</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">Batch</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300">Stock</th>
@@ -429,15 +467,20 @@ export default function Inventory() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" className="px-4 py-4 text-center text-gray-500">Loading...</td></tr>
+              <tr><td colSpan="8" className="px-4 py-4 text-center text-gray-500">Loading...</td></tr>
             ) : inventory.length === 0 ? (
-              <tr><td colSpan="7" className="px-4 py-4 text-center text-gray-500">No inventory found</td></tr>
+              <tr><td colSpan="8" className="px-4 py-4 text-center text-gray-500">No inventory found</td></tr>
             ) : (
               inventory.map((item) => (
-                <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50">
-                  <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{item.medicine?.name || 'N/A'}</td>
-                  <td className="px-4 py-3">{item.medicine?.brand || '—'}</td>
-                  <td className="px-4 py-3">{item.batchNumber}</td>
+                <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.medicine?.name || 'N/A'}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-block rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
+                      {item.medicine?.category || 'General'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{item.medicine?.brand || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">{item.batchNumber}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-1 text-xs font-medium ${
                       item.currentStock <= item.reorderLevel
@@ -447,16 +490,16 @@ export default function Inventory() {
                       {item.currentStock}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400">
                     {formatINR(item.medicine?.buyingPrice)} / {formatINR(item.medicine?.sellingPrice)}
                   </td>
-                  <td className="px-4 py-3">{formatDate(item.expiryDate)}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{formatDate(item.expiryDate)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button onClick={() => handleEdit(item)} className="text-blue-600 hover:text-blue-700">
+                      <button onClick={() => handleEdit(item)} className="text-blue-600 hover:text-blue-700" title="Edit batch">
                         <Edit2 size={18} />
                       </button>
-                      <button onClick={() => handleDelete(item._id)} className="text-red-600 hover:text-red-700">
+                      <button onClick={() => handleDelete(item._id)} className="text-red-600 hover:text-red-700" title="Delete batch">
                         <Trash2 size={18} />
                       </button>
                     </div>

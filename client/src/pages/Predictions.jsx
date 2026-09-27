@@ -1,23 +1,23 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, AlertCircle, Sparkles, History, RefreshCw } from 'lucide-react';
+import { Sparkles, History, RefreshCw, Layers, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 
 const PERIOD_OPTIONS = [
-  { label: 'Next 7 Days', value: 7 },
-  { label: 'Next 30 Days (Recommended)', value: 30 },
-  { label: 'Next 60 Days', value: 60 },
-  { label: 'Next 90 Days', value: 90 },
+  { label: '7 Days', value: 7 },
+  { label: '30 Days (Standard)', value: 30 },
+  { label: '60 Days', value: 60 },
+  { label: '90 Days (Quarterly)', value: 90 },
 ];
 
-/**
- * AI Demand Predictions Page
- *
- * 1. Fetches registered medicines from the catalog on load.
- * 2. Allows the user to select a medicine and a forecast period (7/30/60/90 days).
- * 3. Sends both medicineId + periods to the backend prediction API.
- * 4. Displays Current Stock, Predicted Demand, Recommended Stock, Confidence, Source.
- * 5. Loads and displays prediction history for the pharmacy.
- */
+const VALID_ATC_PREFIXES = ['M01AB', 'M01AE', 'N02BA', 'N02BE', 'N05B', 'N05C', 'R03', 'R06'];
+
+const isSupportedCategory = (cat) => {
+  if (!cat) return false;
+  const upper = String(cat).toUpperCase().trim();
+  if (upper.includes('OTHER')) return false;
+  return VALID_ATC_PREFIXES.some((prefix) => upper.startsWith(prefix) || upper === prefix);
+};
+
 export default function Predictions() {
   const [medicines, setMedicines] = useState([]);
   const [selectedMedicine, setSelectedMedicine] = useState('');
@@ -65,11 +65,17 @@ export default function Predictions() {
   };
 
   /**
-   * Submit selected medicine + period to backend for AI demand forecasting.
+   * Submit selected medicine + period to backend for demand forecasting.
    */
   const handlePredict = async (e) => {
     e.preventDefault();
     if (!selectedMedicine) return;
+
+    const med = medicines.find((m) => m._id === selectedMedicine);
+    if (!isSupportedCategory(med?.category)) {
+      setError(`Cannot forecast demand for "${med?.name}". It is categorized under "${med?.category || 'Other'}", which has no WHO ATC dataset training data.`);
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -90,241 +96,312 @@ export default function Predictions() {
     }
   };
 
-  const sourceLabel = (src) => {
-    if (src === 'ml-service') return 'ML Model';
-    if (src === 'statistical-fallback') return 'Statistical Fallback';
-    return src || 'Unknown';
-  };
+  const selectedMedObj = medicines.find((m) => m._id === selectedMedicine);
+  const isMedSupported = isSupportedCategory(selectedMedObj?.category);
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">AI Predictions</h1>
-        <p className="text-gray-600 dark:text-gray-400">Forecast medicine demand using machine learning</p>
-      </div>
-
-      {/* Info Status Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3 dark:bg-blue-950/40 dark:border-blue-900">
-        <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 dark:text-blue-400" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-medium text-blue-900 dark:text-blue-300">ML Forecast Engine Active</p>
-          <p className="text-sm text-blue-800 dark:text-blue-400">
-            Connecting dynamically to the ML forecasting microservice. Statistical fallback is enabled if the ML service is offline.
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">AI Demand Forecasting</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Forecast medicine stock requirements using trained WHO ATC category models
           </p>
         </div>
+
+        {/* Prediction Engine Source Indicator */}
+        {prediction && (
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                prediction.source === 'ml-service' ? 'bg-emerald-500' : 'bg-amber-500'
+              }`}
+            />
+            <span>
+              Engine:{' '}
+              <strong className="text-slate-900 dark:text-slate-100">
+                {prediction.source === 'ml-service' ? 'ML Model' : 'Statistical Fallback'}
+              </strong>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Tab navigation */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700">
+      <div className="flex border-b border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setActiveTab('predict')}
-          className={`px-4 py-2 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'predict'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+              : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
           }`}
         >
           <Sparkles className="h-4 w-4" />
-          Get Prediction
+          Forecast Demand
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'history'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+              : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
           }`}
         >
           <History className="h-4 w-4" />
-          History
+          Forecast History
         </button>
       </div>
 
       {/* ─── PREDICT TAB ─── */}
       {activeTab === 'predict' && (
-        <>
-          {/* Error alert */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex gap-3 text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-400">
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              <p className="text-sm">{error}</p>
-            </div>
-          )}
-
+        <div className="grid gap-6 lg:grid-cols-3">
           {/* Prediction Query Form */}
-          <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 dark:text-gray-100 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-600" /> Get Prediction
-            </h2>
+          <div className="lg:col-span-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+                Forecast Parameters
+              </h2>
 
-            <form onSubmit={handlePredict} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
-                  Select Medicine from Database
-                </label>
-                <select
-                  value={selectedMedicine}
-                  onChange={(e) => setSelectedMedicine(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-750 dark:border-gray-600 dark:text-gray-100"
-                  required
+              {error && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handlePredict} className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Medicine *
+                  </label>
+                  <select
+                    value={selectedMedicine}
+                    onChange={(e) => {
+                      setSelectedMedicine(e.target.value);
+                      setError('');
+                      setPrediction(null);
+                    }}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    required
+                  >
+                    <option value="">-- Choose Medicine --</option>
+                    {medicines.map((med) => {
+                      const supported = isSupportedCategory(med.category);
+                      return (
+                        <option key={med._id} value={med._id}>
+                          {med.name} {med.brand ? `(${med.brand})` : ''} — {med.category || 'Other'} {!supported ? '[No Forecast]' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {selectedMedObj && (
+                    <div className="mt-2.5 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <Layers className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Category:</span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">
+                          {selectedMedObj.category || 'Other'}
+                        </span>
+                      </div>
+
+                      {!isMedSupported && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                          <strong>No Forecast Available:</strong> This medicine is categorized under &quot;{selectedMedObj.category || 'Other'}&quot;. AI predictions are only available for the 8 WHO ATC dataset categories.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Forecast Horizon
+                  </label>
+                  <select
+                    value={periods}
+                    onChange={(e) => setPeriods(Number(e.target.value))}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    {PERIOD_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!selectedMedicine || loading || (selectedMedObj && !isMedSupported)}
+                  className="mt-2 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">-- Choose a medicine --</option>
-                  {medicines.map((med) => (
-                    <option key={med._id} value={med._id}>
-                      {med.name} {med.brand ? `(${med.brand})` : ''} - SKU: {med.sku}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
-                  Prediction Period
-                </label>
-                <select
-                  value={periods}
-                  onChange={(e) => setPeriods(Number(e.target.value))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-750 dark:border-gray-600 dark:text-gray-100"
-                >
-                  {PERIOD_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                disabled={!selectedMedicine || loading}
-                className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {loading ? 'Generating Prediction...' : 'Get Prediction'}
-              </button>
-            </form>
+                  {selectedMedObj && !isMedSupported
+                    ? 'No Forecast for Other Category'
+                    : loading
+                    ? 'Running Forecast...'
+                    : 'Calculate Forecast'}
+                </button>
+              </form>
+            </div>
           </div>
 
-          {/* Prediction Results Display */}
-          {prediction && (
-            <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Prediction Results</h2>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  prediction.source === 'ml-service'
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                }`}>
-                  Source: {sourceLabel(prediction.source)}
-                </span>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-blue-950/20 dark:border-blue-900">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">Medicine</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2 capitalize">{prediction.medicine}</p>
-                </div>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 dark:bg-yellow-950/20 dark:border-yellow-900">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">Current Stock</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">{prediction.currentStock} units</p>
-                </div>
-
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 dark:bg-purple-950/20 dark:border-purple-900">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">Predicted Demand ({prediction.periods}d)</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">{prediction.predictedDemand} units</p>
-                </div>
-
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 dark:bg-green-950/20 dark:border-green-900">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">Confidence</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">{Math.round(prediction.confidence * 100)}%</p>
-                </div>
-              </div>
-
-              {/* Recommendation */}
-              <div className="mt-6 bg-gray-50 rounded-lg p-4 border border-gray-200 dark:bg-gray-750 dark:border-gray-700">
-                <div className="flex items-start gap-3">
-                  <TrendingUp className="h-5 w-5 text-green-600 mt-1 flex-shrink-0 dark:text-green-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-gray-200">Recommended Stock Adjustment</p>
-                    <p className="text-gray-700 dark:text-gray-300 mt-1">
-                      Based on the AI demand forecast, maintain a stock level of <strong>{prediction.recommendedStock}</strong> units
-                      (20% safety buffer) to satisfy the predicted {prediction.predictedDemand} unit demand
-                      by <strong>{prediction.predictedDate}</strong>.
-                      {prediction.currentStock < prediction.predictedDemand && (
-                        <span className="ml-2 text-red-600 dark:text-red-400 font-medium">
-                          ⚠ Replenishment alert generated — current stock insufficient.
-                        </span>
-                      )}
+          {/* Forecast Results Display */}
+          <div className="lg:col-span-2">
+            {prediction ? (
+              <div className="space-y-4">
+                {/* Result KPI Grid */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Medicine
                     </p>
+                    <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100 capitalize truncate">
+                      {prediction.medicine}
+                    </p>
+                    <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {prediction.category}
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      In Stock
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {prediction.currentStock}
+                    </p>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Current units</span>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                      Predicted Demand
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {prediction.predictedDemand}
+                    </p>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Next {prediction.periods} days
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Target Buffer
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {prediction.recommendedStock}
+                    </p>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">+20% safety buffer</span>
                   </div>
                 </div>
+
+                {/* Stock Status Indicator */}
+                {prediction.currentStock < prediction.predictedDemand ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <p className="font-semibold">Reorder Recommended</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Current stock ({prediction.currentStock}) is below projected demand ({prediction.predictedDemand} units). Shortage of {prediction.predictedDemand - prediction.currentStock} units expected.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+                    <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <div>
+                      <p className="font-semibold">Stock Level Adequate</p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                        Current inventory covers the projected {prediction.periods}-day demand requirement.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </>
+            ) : (
+              <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center dark:border-slate-800 dark:bg-slate-900">
+                <Sparkles className="h-8 w-8 text-slate-400" />
+                <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Select a medicine and click Calculate Forecast
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Forecasts use historical velocity scaled by seasonal category patterns.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ─── HISTORY TAB ─── */}
       {activeTab === 'history' && (
-        <div className="bg-white rounded-lg shadow p-6 dark:bg-gray-800">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <History className="h-5 w-5" /> Prediction History
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Past Demand Predictions
             </h2>
             <button
               onClick={loadHistory}
               disabled={historyLoading}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+              className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
             >
-              <RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>
 
           {historyError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm dark:bg-red-950/30 dark:text-red-400 mb-4">
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-400">
               {historyError}
             </div>
           )}
 
           {historyLoading ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading history...</div>
+            <div className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">Loading history...</div>
           ) : history.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              No predictions yet. Run a prediction to see history here.
+            <div className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+              No forecasts recorded yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">Medicine</th>
-                    <th className="text-left py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">Prediction Date</th>
-                    <th className="text-left py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">Confidence</th>
-                    <th className="text-left py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">Source</th>
-                    <th className="text-left py-2 px-3 text-gray-600 dark:text-gray-400 font-medium">Created</th>
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2.5 px-3">Medicine</th>
+                    <th className="py-2.5 px-3">SKU</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Confidence</th>
+                    <th className="py-2.5 px-3">Source Engine</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {history.map((h) => (
-                    <tr key={h.id} className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="py-2 px-3 font-medium text-gray-900 dark:text-gray-200">{h.medicineName}</td>
-                      <td className="py-2 px-3 text-gray-600 dark:text-gray-400">
-                        {h.predictionDate ? new Date(h.predictionDate).toLocaleDateString() : '-'}
+                    <tr key={h.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-200">
+                        {h.medicineName}
                       </td>
-                      <td className="py-2 px-3 text-gray-700 dark:text-gray-300">
+                      <td className="py-2.5 px-3 font-mono text-xs text-slate-500 dark:text-slate-400">
+                        {h.medicineSku || '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-xs text-slate-500 dark:text-slate-400">
+                        {h.createdAt ? new Date(h.createdAt).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-xs text-slate-700 dark:text-slate-300">
                         {Math.round(Number(h.confidence) * 100)}%
                       </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          h.source === 'ml-service'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                        }`}>
-                          {sourceLabel(h.source)}
+                      <td className="py-2.5 px-3">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                            h.source === 'ml-service'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                          }`}
+                        >
+                          {h.source === 'ml-service' ? 'ML Model' : 'Statistical'}
                         </span>
-                      </td>
-                      <td className="py-2 px-3 text-gray-500 dark:text-gray-400 text-xs">
-                        {new Date(h.createdAt).toLocaleString()}
                       </td>
                     </tr>
                   ))}

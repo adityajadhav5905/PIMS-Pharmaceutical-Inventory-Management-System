@@ -222,7 +222,7 @@ export default function SupportTickets() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tickets by subject, user, email, or message content..."
-            className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2 pl-9 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:bg-gray-750"
+            className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2 pl-9 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:bg-gray-700"
           />
         </div>
 
@@ -300,7 +300,7 @@ export default function SupportTickets() {
                   return (
                     <tr
                       key={ticket.id}
-                      className="transition-colors hover:bg-gray-50/75 dark:hover:bg-gray-750/50"
+                      className="transition-colors hover:bg-gray-50/75 dark:hover:bg-gray-700/50"
                     >
                       {/* Ticket ID */}
                       <td className="whitespace-nowrap px-6 py-4 font-mono text-xs font-semibold text-gray-700 dark:text-gray-300">

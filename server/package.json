@@ -9,7 +9,9 @@
     "seed": "node src/config/seed.js",
     "lint": "eslint .",
     "test": "node src/tests/integration.test.js",
-    "test:concurrency": "node src/tests/concurrency.test.js"
+    "test:otp": "node src/tests/otp_system.test.js",
+    "test:concurrency": "node src/tests/concurrency.test.js",
+    "test:all": "node src/tests/integration.test.js && node src/tests/otp_system.test.js && node src/tests/concurrency.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,6 +26,7 @@
     "mongoose": "^9.10.2",
     "morgan": "^1.10.0",
     "node-cron": "^3.0.3",
+    "nodemailer": "^10.0.11",
     "winston": "^3.13.1"
   },
   "devDependencies": {

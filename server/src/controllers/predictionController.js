@@ -3,23 +3,29 @@ import { getPharmacyDbId } from "../utils/tenantContext.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { requestMlPrediction } from "../services/mlService.js";
 
-/** Map generic/common category terms to standardized ATC codes */
-const mapToAtcCategory = (categoryStr) => {
-  if (!categoryStr) return "M01AB";
+export const VALID_ATC_CATEGORIES = ["M01AB", "M01AE", "N02BA", "N02BE", "N05B", "N05C", "R03", "R06"];
+
+/** Strictly resolve to one of the 8 dataset WHO ATC categories; returns null for 'OTHER' and unclassified */
+export const mapToAtcCategory = (categoryStr) => {
+  if (!categoryStr) return null;
   const upper = categoryStr.toUpperCase().trim();
-  const validAtc = ["M01AB", "M01AE", "N02BA", "N02BE", "N05B", "N05C", "R03", "R06"];
-  if (validAtc.includes(upper)) return upper;
+  if (upper.includes("OTHER") || upper.includes("GENERAL") || upper.includes("CARDIO") || upper.includes("DIABET") || upper.includes("GASTRO")) {
+    return null;
+  }
 
-  if (upper.includes("ALLERG") || upper.includes("HISTAMINE") || upper.includes("CETIRIZ")) return "R06";
-  if (upper.includes("INHAL") || upper.includes("AIRWAY") || upper.includes("RESPIRATORY") || upper.includes("SALBUTAMOL")) return "R03";
-  if (upper.includes("PARACET") || upper.includes("ACETAMIN") || upper.includes("ANALGESIC") || upper.includes("FEVER")) return "N02BE";
-  if (upper.includes("ASPIRIN") || upper.includes("SALICYL")) return "N02BA";
-  if (upper.includes("IBUPROFEN") || upper.includes("PROPIONIC")) return "M01AE";
-  if (upper.includes("INFLAMM") || upper.includes("ANTIBIOTIC") || upper.includes("DICLOFENAC") || upper.includes("AMOX")) return "M01AB";
-  if (upper.includes("ANXIO") || upper.includes("DIAZEPAM") || upper.includes("METFORMIN")) return "N05B";
-  if (upper.includes("SEDAT") || upper.includes("SLEEP") || upper.includes("HYPNOTIC") || upper.includes("STATIN")) return "N05C";
+  for (const atc of VALID_ATC_CATEGORIES) {
+    if (upper.startsWith(atc) || upper === atc) return atc;
+  }
+  if (upper.includes("R06") || upper.includes("ALLERG") || upper.includes("HISTAMINE") || upper.includes("CETIRIZ")) return "R06";
+  if (upper.includes("R03") || upper.includes("INHAL") || upper.includes("AIRWAY") || upper.includes("RESPIRATORY") || upper.includes("SALBUTAMOL") || upper.includes("ALBUTEROL")) return "R03";
+  if (upper.includes("N02BE") || upper.includes("PARACET") || upper.includes("ACETAMIN") || upper.includes("PYRAZOLONE") || upper.includes("ANILIDE")) return "N02BE";
+  if (upper.includes("N02BA") || upper.includes("ASPIRIN") || upper.includes("SALICYL")) return "N02BA";
+  if (upper.includes("M01AE") || upper.includes("IBUPROFEN") || upper.includes("PROPIONIC") || upper.includes("NAPROXEN")) return "M01AE";
+  if (upper.includes("M01AB") || upper.includes("ACETIC") || upper.includes("DICLOFENAC") || upper.includes("AMOX") || upper.includes("ANTIBIOTIC")) return "M01AB";
+  if (upper.includes("N05B") || upper.includes("ANXIO") || upper.includes("DIAZEPAM") || upper.includes("LORAZEPAM")) return "N05B";
+  if (upper.includes("N05C") || upper.includes("SEDAT") || upper.includes("SLEEP") || upper.includes("HYPNOTIC") || upper.includes("ZOLPIDEM")) return "N05C";
 
-  return "M01AB";
+  return null;
 };
 
 /**
@@ -104,8 +110,14 @@ export const runPrediction = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Medicine not found in this pharmacy" });
   }
 
-  // 1. Resolve Category
+  // 1. Resolve Category - reject if in 'OTHER' or not in the 8 dataset categories
   const atcCategory = mapToAtcCategory(medicine.category);
+  if (!atcCategory) {
+    return res.status(400).json({
+      success: false,
+      message: `AI demand forecasting is not supported for "${medicine.name}". It is categorized under "${medicine.category || 'Other'}", which lacks training data. Predictions are strictly available only for the 8 WHO ATC dataset categories (M01AB, M01AE, N02BA, N02BE, N05B, N05C, R03, R06).`
+    });
+  }
 
   // 2. Compute completed pharmacy baseline (strictly excluding current incomplete month)
   const initialEstimate = medicine.leadTimeDays ? (medicine.leadTimeDays * 15) : 100;

@@ -50,25 +50,27 @@ async function seed() {
         { name: "Alice Green", email: "alice@hospital.com", position: "Pharmacy Technician", department: "Dispensing", salary: 32000, joinDate: new Date("2025-05-20"), totalSales: 0.0 }
       ],
       medicines: [
-        { sku: "MED-001", name: "Paracetamol", brand: "Crocin", description: "500mg pain relief tablet", category: "Analgesic", supplier: "GlaxoSmithKline", buyingPrice: 2.5, sellingPrice: 5.0, leadTimeDays: 5 },
-        { sku: "MED-002", name: "Amoxicillin", brand: "Mox", description: "250mg antibiotic capsule", category: "Antibiotic", supplier: "Sun Pharma", buyingPrice: 8.0, sellingPrice: 15.0, leadTimeDays: 8 },
-        { sku: "MED-003", name: "Ibuprofen", brand: "Advil", description: "400mg NSAID anti-inflammatory", category: "Analgesic", supplier: "Pfizer", buyingPrice: 3.0, sellingPrice: 5.0, leadTimeDays: 4 },
-        { sku: "MED-004", name: "Metformin", brand: "Glucophage", description: "500mg anti-diabetic tablet", category: "Antidiabetic", supplier: "Merck", buyingPrice: 5.0, sellingPrice: 8.0, leadTimeDays: 6 },
-        { sku: "MED-005", name: "Atorvastatin", brand: "Lipitor", description: "10mg cholesterol lowering statin", category: "Cardiovascular", supplier: "Viatris", buyingPrice: 10.0, sellingPrice: 18.0, leadTimeDays: 7 },
-        { sku: "MED-006", name: "Lisinopril", brand: "Zestril", description: "5mg blood pressure ACE inhibitor", category: "Cardiovascular", supplier: "AstraZeneca", buyingPrice: 4.0, sellingPrice: 7.5, leadTimeDays: 5 },
-        { sku: "MED-007", name: "Albuterol", brand: "ProAir", description: "Inhaler for asthma bronchospasms", category: "Respiratory", supplier: "Teva", buyingPrice: 15.0, sellingPrice: 25.0, leadTimeDays: 10 },
-        { sku: "MED-008", name: "Omeprazole", brand: "Prilosec", description: "20mg acid reflux capsule", category: "Gastrointestinal", supplier: "Procter & Gamble", buyingPrice: 3.5, sellingPrice: 6.0, leadTimeDays: 6 }
+        { sku: "MED-001", name: "Paracetamol", brand: "Crocin", description: "500mg pain relief tablet", category: "N02BE", supplier: "GlaxoSmithKline", buyingPrice: 2.5, sellingPrice: 5.0, leadTimeDays: 5 },
+        { sku: "MED-002", name: "Amoxicillin", brand: "Mox", description: "250mg antibiotic capsule", category: "M01AB", supplier: "Sun Pharma", buyingPrice: 8.0, sellingPrice: 15.0, leadTimeDays: 8 },
+        { sku: "MED-003", name: "Ibuprofen", brand: "Advil", description: "400mg NSAID anti-inflammatory", category: "M01AE", supplier: "Pfizer", buyingPrice: 3.0, sellingPrice: 5.0, leadTimeDays: 4 },
+        { sku: "MED-004", name: "Diazepam", brand: "Valium", description: "5mg anxiolytic tablet", category: "N05B", supplier: "Roche", buyingPrice: 5.0, sellingPrice: 8.0, leadTimeDays: 6 },
+        { sku: "MED-005", name: "Zolpidem", brand: "Ambien", description: "10mg hypnotic sedative tablet", category: "N05C", supplier: "Sanofi", buyingPrice: 10.0, sellingPrice: 18.0, leadTimeDays: 7 },
+        { sku: "MED-006", name: "Aspirin", brand: "Disprin", description: "325mg pain relief tablet", category: "N02BA", supplier: "Bayer", buyingPrice: 4.0, sellingPrice: 7.5, leadTimeDays: 5 },
+        { sku: "MED-007", name: "Albuterol Inhaler", brand: "ProAir", description: "Inhaler for obstructive airway diseases", category: "R03", supplier: "Teva", buyingPrice: 15.0, sellingPrice: 25.0, leadTimeDays: 10 },
+        { sku: "MED-008", name: "Cetirizine", brand: "Zyrtec", description: "10mg antihistamine allergy tablet", category: "R06", supplier: "J&J", buyingPrice: 3.5, sellingPrice: 6.0, leadTimeDays: 6 },
+        { sku: "MED-009", name: "Omeprazole", brand: "Prilosec", description: "20mg acid reflux capsule (Non-ATC)", category: "OTHER", supplier: "Procter & Gamble", buyingPrice: 3.5, sellingPrice: 6.0, leadTimeDays: 6 }
       ],
       batches: [
         { medSku: "MED-001", batchNumber: "BATCH-PAR-01", currentStock: 400, reorderLevel: 50, expiryOffsetDays: 180 },
         { medSku: "MED-001", batchNumber: "BATCH-PAR-02", currentStock: 50, reorderLevel: 50, expiryOffsetDays: -5 },
         { medSku: "MED-002", batchNumber: "BATCH-AMO-01", currentStock: 12, reorderLevel: 25, expiryOffsetDays: 45 },
         { medSku: "MED-003", batchNumber: "BATCH-IBU-01", currentStock: 220, reorderLevel: 40, expiryOffsetDays: 90 },
-        { medSku: "MED-004", batchNumber: "BATCH-MET-01", currentStock: 180, reorderLevel: 30, expiryOffsetDays: 8 },
-        { medSku: "MED-005", batchNumber: "BATCH-ATO-01", currentStock: 500, reorderLevel: 60, expiryOffsetDays: 200 },
-        { medSku: "MED-006", batchNumber: "BATCH-LIS-01", currentStock: 0, reorderLevel: 30, expiryOffsetDays: 120 },
+        { medSku: "MED-004", batchNumber: "BATCH-DIA-01", currentStock: 180, reorderLevel: 30, expiryOffsetDays: 80 },
+        { medSku: "MED-005", batchNumber: "BATCH-ZOL-01", currentStock: 500, reorderLevel: 60, expiryOffsetDays: 200 },
+        { medSku: "MED-006", batchNumber: "BATCH-ASP-01", currentStock: 0, reorderLevel: 30, expiryOffsetDays: 120 },
         { medSku: "MED-007", batchNumber: "BATCH-ALB-01", currentStock: 80, reorderLevel: 15, expiryOffsetDays: 22 },
-        { medSku: "MED-008", batchNumber: "BATCH-OME-01", currentStock: 110, reorderLevel: 20, expiryOffsetDays: 150 }
+        { medSku: "MED-008", batchNumber: "BATCH-CET-01", currentStock: 110, reorderLevel: 20, expiryOffsetDays: 150 },
+        { medSku: "MED-009", batchNumber: "BATCH-OME-01", currentStock: 90, reorderLevel: 20, expiryOffsetDays: 180 }
       ]
     },
     {
@@ -85,16 +87,16 @@ async function seed() {
         { name: "Tom Harris", email: "tom@apex.com", position: "Pharmacy Technician", department: "Dispensing", salary: 34000, joinDate: new Date("2025-05-25"), totalSales: 0.0 }
       ],
       medicines: [
-        { sku: "MED-P2-001", name: "Aspirin", brand: "Disprin", description: "325mg pain relief tablet", category: "Analgesic", supplier: "Bayer", buyingPrice: 1.5, sellingPrice: 3.5, leadTimeDays: 5 },
-        { sku: "MED-P2-002", name: "Ciprofloxacin", brand: "Ciplox", description: "500mg broad spectrum antibiotic", category: "Antibiotic", supplier: "Cipla", buyingPrice: 12.0, sellingPrice: 22.0, leadTimeDays: 7 },
-        { sku: "MED-P2-003", name: "Naproxen", brand: "Aleve", description: "220mg NSAID pain killer", category: "Analgesic", supplier: "Bayer", buyingPrice: 4.0, sellingPrice: 7.0, leadTimeDays: 6 },
-        { sku: "MED-P2-004", name: "Glipizide", brand: "Glucotrol", description: "5mg type 2 diabetes treatment", category: "Antidiabetic", supplier: "Pfizer", buyingPrice: 6.0, sellingPrice: 10.0, leadTimeDays: 5 }
+        { sku: "MED-P2-001", name: "Aspirin", brand: "Disprin", description: "325mg salicylic acid tablet", category: "N02BA", supplier: "Bayer", buyingPrice: 1.5, sellingPrice: 3.5, leadTimeDays: 5 },
+        { sku: "MED-P2-002", name: "Diclofenac", brand: "Voltaren", description: "50mg anti-inflammatory acetic acid tablet", category: "M01AB", supplier: "Novartis", buyingPrice: 12.0, sellingPrice: 22.0, leadTimeDays: 7 },
+        { sku: "MED-P2-003", name: "Naproxen", brand: "Aleve", description: "220mg NSAID propionic acid tablet", category: "M01AE", supplier: "Bayer", buyingPrice: 4.0, sellingPrice: 7.0, leadTimeDays: 6 },
+        { sku: "MED-P2-004", name: "Lorazepam", brand: "Ativan", description: "2mg anxiolytic tablet", category: "N05B", supplier: "Pfizer", buyingPrice: 6.0, sellingPrice: 10.0, leadTimeDays: 5 }
       ],
       batches: [
         { medSku: "MED-P2-001", batchNumber: "BATCH-ASP-01", currentStock: 350, reorderLevel: 50, expiryOffsetDays: 140 },
-        { medSku: "MED-P2-002", batchNumber: "BATCH-CIP-01", currentStock: 8, reorderLevel: 20, expiryOffsetDays: 15 },
+        { medSku: "MED-P2-002", batchNumber: "BATCH-DIC-01", currentStock: 8, reorderLevel: 20, expiryOffsetDays: 15 },
         { medSku: "MED-P2-003", batchNumber: "BATCH-NAP-01", currentStock: 150, reorderLevel: 30, expiryOffsetDays: 180 },
-        { medSku: "MED-P2-004", batchNumber: "BATCH-GLI-01", currentStock: 75, reorderLevel: 25, expiryOffsetDays: 90 }
+        { medSku: "MED-P2-004", batchNumber: "BATCH-LOR-01", currentStock: 75, reorderLevel: 25, expiryOffsetDays: 90 }
       ]
     },
     {
@@ -108,12 +110,14 @@ async function seed() {
         { name: "Michael Chang", email: "michael@citycare.com", position: "Senior Pharmacist", department: "Dispensing", salary: 66000, joinDate: new Date("2025-01-10"), totalSales: 800.0 }
       ],
       medicines: [
-        { sku: "MED-P3-001", name: "Cetirizine", brand: "Zyrtec", description: "10mg allergy relief antihistamine", category: "Antihistamine", supplier: "J&J", buyingPrice: 1.8, sellingPrice: 4.0, leadTimeDays: 4 },
-        { sku: "MED-P3-002", name: "Pantoprazole", brand: "Protonix", description: "40mg proton pump inhibitor", category: "Gastrointestinal", supplier: "Pfizer", buyingPrice: 4.5, sellingPrice: 8.5, leadTimeDays: 5 }
+        { sku: "MED-P3-001", name: "Cetirizine", brand: "Zyrtec", description: "10mg allergy relief antihistamine", category: "R06", supplier: "J&J", buyingPrice: 1.8, sellingPrice: 4.0, leadTimeDays: 4 },
+        { sku: "MED-P3-002", name: "Salbutamol Inhaler", brand: "Ventolin", description: "100mcg airway bronchodilator", category: "R03", supplier: "GSK", buyingPrice: 12.0, sellingPrice: 20.0, leadTimeDays: 5 },
+        { sku: "MED-P3-003", name: "Pantoprazole", brand: "Protonix", description: "40mg proton pump inhibitor (Non-ATC)", category: "OTHER", supplier: "Pfizer", buyingPrice: 4.5, sellingPrice: 8.5, leadTimeDays: 5 }
       ],
       batches: [
         { medSku: "MED-P3-001", batchNumber: "BATCH-CET-01", currentStock: 200, reorderLevel: 30, expiryOffsetDays: 200 },
-        { medSku: "MED-P3-002", batchNumber: "BATCH-PAN-01", currentStock: 15, reorderLevel: 25, expiryOffsetDays: 5 }
+        { medSku: "MED-P3-002", batchNumber: "BATCH-SAL-01", currentStock: 45, reorderLevel: 20, expiryOffsetDays: 120 },
+        { medSku: "MED-P3-003", batchNumber: "BATCH-PAN-01", currentStock: 15, reorderLevel: 25, expiryOffsetDays: 5 }
       ]
     }
   ];

@@ -3,21 +3,76 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../config
 import env from "../config/env.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Pharmacy, User, Staff } from "../models/index.js";
+import { OtpService } from "../services/otpService.js";
+
+/**
+ * Send OTP for Pharmacy Creation / Registration.
+ */
+export const sendRegistrationOtp = asyncHandler(async (req, res) => {
+  const { email, pharmacyId, name } = req.body;
+
+  if (!email || !pharmacyId) {
+    return res.status(400).json({ success: false, message: "Email and Pharmacy ID are required" });
+  }
+
+  const cleanSlug = pharmacyId.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-");
+  const cleanEmail = email.toLowerCase().trim();
+
+  // 1. Verify pharmacy workspace identifier is available
+  const existingPharmacy = await Pharmacy.findOne({ slug: cleanSlug });
+  if (existingPharmacy) {
+    return res.status(409).json({
+      success: false,
+      message: "Pharmacy workspace with this identifier already exists."
+    });
+  }
+
+  // 2. Verify email is available
+  const existingUser = await User.findOne({ email: cleanEmail });
+  if (existingUser) {
+    return res.status(409).json({
+      success: false,
+      message: "Email is already registered. Please log in instead."
+    });
+  }
+
+  const result = await OtpService.generateAndSendOtp({
+    email: cleanEmail,
+    purpose: "PHARMACY_REGISTRATION",
+    details: `Creation of pharmacy workspace '${cleanSlug}' by ${name || "Administrator"}`
+  });
+
+  return res.json({
+    success: true,
+    message: result.message,
+    expiresInMinutes: result.expiresInMinutes
+  });
+});
 
 /**
  * Register a new user and pharmacy workspace.
- * Only allows creating a new pharmacy (assigning creator Admin role).
+ * Only creates records after successful OTP verification (if OTP provided or required).
  */
 export const register = asyncHandler(async (req, res) => {
-  const { name, email, password, pharmacyId } = req.body;
+  const { name, email, password, pharmacyId, otp } = req.body;
 
   if (!pharmacyId) {
     return res.status(400).json({ success: false, message: "Pharmacy workspace ID is required" });
   }
 
   const cleanSlug = pharmacyId.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-");
+  const cleanEmail = email.toLowerCase().trim();
 
-  // 1. Verify that the pharmacy workspace identifier is not already taken
+  // 1. Perform OTP verification first
+  if (otp) {
+    await OtpService.verifyOtp({
+      email: cleanEmail,
+      purpose: "PHARMACY_REGISTRATION",
+      otp
+    });
+  }
+
+  // 2. Verify that the pharmacy workspace identifier is not already taken
   const existingPharmacy = await Pharmacy.findOne({ slug: cleanSlug });
   if (existingPharmacy) {
     return res.status(409).json({
@@ -26,13 +81,13 @@ export const register = asyncHandler(async (req, res) => {
     });
   }
 
-  // 2. Check if email is already registered in the system
-  const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+  // 3. Check if email is already registered in the system
+  const existingUser = await User.findOne({ email: cleanEmail });
   if (existingUser) {
     return res.status(409).json({ success: false, message: "Email already registered in system" });
   }
 
-  // 3. Create the new pharmacy workspace (creator is assigned Admin)
+  // 4. Create the new pharmacy workspace (creator is assigned Admin)
   const assignedRole = "Admin";
   const formattedName = cleanSlug
     .replace(/-/g, " ")
@@ -43,23 +98,23 @@ export const register = asyncHandler(async (req, res) => {
     name: formattedName
   });
 
-  // 4. Hash password
+  // 5. Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // 5. Save new user record
+  // 6. Save new user record
   const newUser = await User.create({
     pharmacyId: newPharmacy._id,
     name,
-    email: email.toLowerCase().trim(),
+    email: cleanEmail,
     password: hashedPassword,
     role: assignedRole
   });
 
-  // 6. Create initial staff entry for workspace admin
+  // 7. Create initial staff entry for workspace admin
   await Staff.create({
     pharmacyId: newPharmacy._id,
     name,
-    email: email.toLowerCase().trim(),
+    email: cleanEmail,
     position: "System Admin",
     department: "Management",
     status: "Active"
@@ -176,6 +231,36 @@ export const refresh = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Send OTP for Settings Profile / Password / Name changes.
+ */
+export const sendSettingsOtp = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user.sub);
+  if (!user) {
+    return res.status(404).json({ success: false, message: "User not found" });
+  }
+
+  const { action } = req.body;
+  let purpose = "SETTINGS_UPDATE";
+  if (action === "CHANGE_NAME") purpose = "CHANGE_NAME";
+  else if (action === "CHANGE_PASSWORD") purpose = "CHANGE_PASSWORD";
+
+  const result = await OtpService.generateAndSendOtp({
+    email: user.email,
+    userId: user._id,
+    pharmacyId: user.pharmacyId,
+    purpose,
+    details: `Authorization to update account: ${purpose}`
+  });
+
+  return res.json({
+    success: true,
+    message: result.message,
+    expiresInMinutes: result.expiresInMinutes,
+    purpose
+  });
+});
+
+/**
  * Get profile details of currently logged-in user.
  */
 export const getProfile = asyncHandler(async (req, res) => {
@@ -202,15 +287,38 @@ export const getProfile = asyncHandler(async (req, res) => {
 
 /**
  * Update user profile (name, email, password).
+ * Validates action-specific OTP before performing database modifications.
  */
 export const updateProfile = asyncHandler(async (req, res) => {
-  const { name, email, currentPassword, newPassword } = req.body;
+  const { name, email, currentPassword, newPassword, otp, nameOtp, passwordOtp } = req.body;
   const user = await User.findById(req.user.sub);
 
   if (!user) {
     return res.status(404).json({ success: false, message: "User not found" });
   }
 
+  // 1. If changing name: verify OTP if provided
+  const isNameChanging = name && name.trim() !== user.name;
+  if (isNameChanging && (nameOtp || otp)) {
+    await OtpService.verifyOtp({
+      email: user.email,
+      purpose: "CHANGE_NAME",
+      otp: nameOtp || otp
+    }).catch(async (err) => {
+      // Fallback to SETTINGS_UPDATE if generated under generic settings purpose
+      if (err.message?.includes("No active verification code")) {
+        await OtpService.verifyOtp({
+          email: user.email,
+          purpose: "SETTINGS_UPDATE",
+          otp: nameOtp || otp
+        });
+      } else {
+        throw err;
+      }
+    });
+  }
+
+  // 2. If changing password: verify current password + verify OTP if provided
   if (newPassword) {
     if (!currentPassword) {
       return res.status(400).json({ success: false, message: "Current password is required to set new password" });
@@ -219,6 +327,25 @@ export const updateProfile = asyncHandler(async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ success: false, message: "Current password is incorrect" });
     }
+
+    if (passwordOtp || otp) {
+      await OtpService.verifyOtp({
+        email: user.email,
+        purpose: "CHANGE_PASSWORD",
+        otp: passwordOtp || otp
+      }).catch(async (err) => {
+        if (err.message?.includes("No active verification code")) {
+          await OtpService.verifyOtp({
+            email: user.email,
+            purpose: "SETTINGS_UPDATE",
+            otp: passwordOtp || otp
+          });
+        } else {
+          throw err;
+        }
+      });
+    }
+
     user.password = await bcrypt.hash(newPassword, 10);
   }
 

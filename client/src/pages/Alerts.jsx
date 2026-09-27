@@ -184,7 +184,7 @@ export default function Alerts() {
                     </div>
                     <button
                       onClick={() => handleUndoClose(alert._id)}
-                      className="px-4 py-2 bg-gray-200 text-gray-850 dark:bg-gray-750 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-650 text-sm font-semibold transition-colors shadow-sm"
+                      className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-semibold transition-colors shadow-sm"
                     >
                       Undo Action
                     </button>
