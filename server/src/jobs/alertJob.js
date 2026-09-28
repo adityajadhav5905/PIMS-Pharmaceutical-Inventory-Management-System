@@ -28,35 +28,48 @@ class LowStockStrategy extends AlertStrategy {
   async check(batch, pharmacyDbId, pharmacyId) {
     const medName = batch.medicineId?.name || "Medicine";
     if (batch.currentStock <= batch.reorderLevel) {
-      const activeAlert = await Alert.findOne({
-        inventoryId: batch._id,
-        type: "LOW_STOCK",
-        isResolved: false
-      });
+      const message = `${medName} (Batch: ${batch.batchNumber}) is below reorder level. Current stock: ${batch.currentStock} units (Reorder limit: ${batch.reorderLevel} units).`;
+      const severity = batch.currentStock === 0 ? "High" : "Medium";
 
-      if (!activeAlert) {
-        const message = `${medName} (Batch: ${batch.batchNumber}) is below reorder level. Current stock: ${batch.currentStock} units (Reorder limit: ${batch.reorderLevel} units).`;
-        const severity = batch.currentStock === 0 ? "High" : "Medium";
-
-        await Alert.create({
+      const alert = await Alert.findOneAndUpdate(
+        {
           pharmacyId: pharmacyDbId,
           inventoryId: batch._id,
           type: "LOW_STOCK",
-          message,
-          severity
-        });
-        logger.info({ message: `Low stock alert generated for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
+          isResolved: false
+        },
+        {
+          $setOnInsert: {
+            pharmacyId: pharmacyDbId,
+            inventoryId: batch._id,
+            type: "LOW_STOCK",
+            message,
+            severity,
+            isResolved: false
+          }
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+
+      if (alert) {
+        logger.info({ message: `Low stock alert verified for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
       }
     } else {
-      const activeAlert = await Alert.findOne({
-        inventoryId: batch._id,
-        type: "LOW_STOCK",
-        isResolved: false
-      });
-      if (activeAlert) {
-        activeAlert.isResolved = true;
-        activeAlert.closedAt = new Date();
-        await activeAlert.save();
+      const result = await Alert.updateMany(
+        {
+          pharmacyId: pharmacyDbId,
+          inventoryId: batch._id,
+          type: "LOW_STOCK",
+          isResolved: false
+        },
+        {
+          $set: {
+            isResolved: true,
+            closedAt: new Date()
+          }
+        }
+      );
+      if (result.modifiedCount > 0) {
         logger.info({ message: `Low stock alert auto-resolved for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
       }
     }
@@ -73,34 +86,47 @@ class OverstockStrategy extends AlertStrategy {
     const medName = batch.medicineId?.name || "Medicine";
     const overstockThreshold = batch.reorderLevel * 3;
     if (batch.currentStock > overstockThreshold) {
-      const activeAlert = await Alert.findOne({
-        inventoryId: batch._id,
-        type: "OVERSTOCK",
-        isResolved: false
-      });
+      const message = `${medName} (Batch: ${batch.batchNumber}) is overstocked. Current stock: ${batch.currentStock} units (Reorder limit: ${batch.reorderLevel} units, Overstock limit: ${overstockThreshold} units).`;
 
-      if (!activeAlert) {
-        const message = `${medName} (Batch: ${batch.batchNumber}) is overstocked. Current stock: ${batch.currentStock} units (Reorder limit: ${batch.reorderLevel} units, Overstock limit: ${overstockThreshold} units).`;
-
-        await Alert.create({
+      const alert = await Alert.findOneAndUpdate(
+        {
           pharmacyId: pharmacyDbId,
           inventoryId: batch._id,
           type: "OVERSTOCK",
-          message,
-          severity: "Low"
-        });
-        logger.info({ message: `Overstock alert generated for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
+          isResolved: false
+        },
+        {
+          $setOnInsert: {
+            pharmacyId: pharmacyDbId,
+            inventoryId: batch._id,
+            type: "OVERSTOCK",
+            message,
+            severity: "Low",
+            isResolved: false
+          }
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+
+      if (alert) {
+        logger.info({ message: `Overstock alert verified for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
       }
     } else {
-      const activeAlert = await Alert.findOne({
-        inventoryId: batch._id,
-        type: "OVERSTOCK",
-        isResolved: false
-      });
-      if (activeAlert) {
-        activeAlert.isResolved = true;
-        activeAlert.closedAt = new Date();
-        await activeAlert.save();
+      const result = await Alert.updateMany(
+        {
+          pharmacyId: pharmacyDbId,
+          inventoryId: batch._id,
+          type: "OVERSTOCK",
+          isResolved: false
+        },
+        {
+          $set: {
+            isResolved: true,
+            closedAt: new Date()
+          }
+        }
+      );
+      if (result.modifiedCount > 0) {
         logger.info({ message: `Overstock alert auto-resolved for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
       }
     }
@@ -119,36 +145,49 @@ class ExpiryStrategy extends AlertStrategy {
     const daysToExpiry = (new Date(batch.expiryDate) - now) / (1000 * 60 * 60 * 24);
 
     if (daysToExpiry <= 30) {
-      const activeAlert = await Alert.findOne({
-        inventoryId: batch._id,
-        type: "EXPIRY_WARNING",
-        isResolved: false
-      });
+      const severity = daysToExpiry <= 7 ? "High" : (daysToExpiry <= 14 ? "Medium" : "Low");
+      const expiryString = new Date(batch.expiryDate).toDateString();
+      const message = `${medName} batch ${batch.batchNumber} is expiring in ${Math.ceil(daysToExpiry)} days (Expiry: ${expiryString}).`;
 
-      if (!activeAlert) {
-        const severity = daysToExpiry <= 7 ? "High" : (daysToExpiry <= 14 ? "Medium" : "Low");
-        const expiryString = new Date(batch.expiryDate).toDateString();
-        const message = `${medName} batch ${batch.batchNumber} is expiring in ${Math.ceil(daysToExpiry)} days (Expiry: ${expiryString}).`;
-
-        await Alert.create({
+      const alert = await Alert.findOneAndUpdate(
+        {
           pharmacyId: pharmacyDbId,
           inventoryId: batch._id,
           type: "EXPIRY_WARNING",
-          message,
-          severity
-        });
-        logger.info({ message: `Expiry warning alert generated for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
+          isResolved: false
+        },
+        {
+          $setOnInsert: {
+            pharmacyId: pharmacyDbId,
+            inventoryId: batch._id,
+            type: "EXPIRY_WARNING",
+            message,
+            severity,
+            isResolved: false
+          }
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+
+      if (alert) {
+        logger.info({ message: `Expiry warning alert verified for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
       }
     } else {
-      const activeAlert = await Alert.findOne({
-        inventoryId: batch._id,
-        type: "EXPIRY_WARNING",
-        isResolved: false
-      });
-      if (activeAlert) {
-        activeAlert.isResolved = true;
-        activeAlert.closedAt = new Date();
-        await activeAlert.save();
+      const result = await Alert.updateMany(
+        {
+          pharmacyId: pharmacyDbId,
+          inventoryId: batch._id,
+          type: "EXPIRY_WARNING",
+          isResolved: false
+        },
+        {
+          $set: {
+            isResolved: true,
+            closedAt: new Date()
+          }
+        }
+      );
+      if (result.modifiedCount > 0) {
         logger.info({ message: `Expiry warning alert auto-resolved for batch: ${batch.batchNumber} (Tenant: ${pharmacyId})` });
       }
     }

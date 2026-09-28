@@ -172,11 +172,14 @@ export const login = asyncHandler(async (req, res) => {
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
 
+  const isProd = env.nodeEnv === "production";
+
   // Securely set refresh token ONLY in httpOnly cookie
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    sameSite: "strict",
-    secure: env.nodeEnv === "production",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+    path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
 
@@ -201,10 +204,12 @@ export const login = asyncHandler(async (req, res) => {
  * Log out user and clear refresh token cookie.
  */
 export const logout = asyncHandler(async (req, res) => {
+  const isProd = env.nodeEnv === "production";
   res.clearCookie("refreshToken", {
     httpOnly: true,
-    sameSite: "strict",
-    secure: env.nodeEnv === "production"
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+    path: "/"
   });
   return res.json({ success: true, message: "Logged out successfully" });
 });

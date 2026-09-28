@@ -112,13 +112,17 @@ export default function Staff() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!otp.trim()) {
+      setError('Security verification code (OTP) is required. Please request and enter your 6-digit OTP.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const payload = { ...formData };
+      const payload = { ...formData, otp: otp.trim() };
       if (!payload.password) delete payload.password;
-      if (otp.trim()) payload.otp = otp.trim();
 
       if (editingId) {
         await api.updateStaff(editingId, payload);
@@ -127,13 +131,12 @@ export default function Staff() {
           message: `Staff details updated for ${formData.name}.`
         });
       } else {
-        const assignedPassword = formData.password.trim() || 'ChangeMe123!';
-        await api.createStaff(payload);
+        const res = await api.createStaff(payload);
         setSuccessInfo({
           type: 'create',
           email: formData.email.trim(),
-          password: assignedPassword,
-          name: formData.name
+          name: formData.name,
+          message: res.message || `Staff member created for ${formData.name}. Secure credentials dispatched to employee email.`
         });
       }
       resetForm();
@@ -148,6 +151,10 @@ export default function Staff() {
   const handleConfirmDelete = async (e) => {
     e.preventDefault();
     if (!deleteModalStaff) return;
+    if (!deleteOtp.trim()) {
+      setError('Deletion verification code (OTP) is required. Please request and enter your 6-digit OTP.');
+      return;
+    }
 
     setLoading(true);
     setError('');

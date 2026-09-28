@@ -34,7 +34,7 @@ app.use(
         return callback(null, true);
       }
       const cleanOrigin = origin.replace(/\/$/, "");
-      if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes("*")) {
+      if (allowedOrigins.includes(cleanOrigin)) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));

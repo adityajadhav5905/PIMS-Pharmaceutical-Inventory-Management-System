@@ -45,7 +45,7 @@ export const updatePreferences = asyncHandler(async (req, res) => {
       inventoryAlerts: inventoryAlerts !== undefined ? Boolean(inventoryAlerts) : true,
       weeklyReports: weeklyReports !== undefined ? Boolean(weeklyReports) : false
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   );
 
   return res.json({

@@ -96,7 +96,10 @@ const cleanTenant = async (slug) => {
     ]);
   }
   await User.deleteMany({
-    email: { $in: ["admin_a@qapims.com", "admin_b@qapims.com", "sarah_pharmacist@qapims.com", "staff_two@qapims.com", "different_email@qapims.com"] }
+    email: { $in: ["admin_a@qapims.com", "admin_b@qapims.com", "sarah_pharmacist@qapims.com", "staff_two@qapims.com", "different_email@qapims.com", "temp_pharmacist@qapims.com", "pharmacist_b@qapims.com"] }
+  });
+  await Staff.deleteMany({
+    email: { $in: ["admin_a@qapims.com", "admin_b@qapims.com", "sarah_pharmacist@qapims.com", "staff_two@qapims.com", "different_email@qapims.com", "temp_pharmacist@qapims.com", "pharmacist_b@qapims.com"] }
   });
   await Otp.deleteMany({});
 };
@@ -263,15 +266,29 @@ async function runQaVerificationSuite() {
     // ══════════════════════════════════════════════════════════════════════════
     section("3. STAFF CREATION & LOGIN IDENTITY SYNCHRONIZATION");
     // ══════════════════════════════════════════════════════════════════════════
+    // Attempt staff creation without OTP -> 400
+    const failNoOtp = await req("POST", "/staff", {
+      name: "Sarah Pharmacist",
+      email: "sarah_pharmacist@qapims.com",
+      position: "Pharmacist",
+      department: "Dispensing"
+    }, tokenAdminA);
+    assert(failNoOtp.status === 400, "Admin cannot create staff without OTP -> 400 Bad Request");
+
+    // Request OTP for staff creation
+    await req("POST", "/staff/send-otp", { action: "create" }, tokenAdminA);
+    const staffCreateOtp = emailService.getLastSentEmail()?.metadata?.otp;
+
     const createStaffA = await req("POST", "/staff", {
       name: "Sarah Pharmacist",
       email: "sarah_pharmacist@qapims.com",
       position: "Pharmacist",
       department: "Dispensing",
       salary: 40000,
-      joinDate: new Date().toISOString()
+      joinDate: new Date().toISOString(),
+      otp: staffCreateOtp
     }, tokenAdminA);
-    assert(createStaffA.status === 201, "Admin A creates staff member -> 201");
+    assert(createStaffA.status === 201, "Admin A creates staff member with OTP -> 201");
     staffAId = createStaffA.data.data?.id || createStaffA.data.data?._id;
 
     // Verify staff has automatic login user account in MongoDB
@@ -279,13 +296,22 @@ async function runQaVerificationSuite() {
     assert(!!staffUserInDb, "Staff creation automatically created linked user login");
     assert(staffUserInDb.role === "Pharmacist", "Linked user has 'Pharmacist' role");
 
+    // Get generated temporary password from dispatched credentials email
+    const credEmail = emailService.getLastSentEmail();
+    const tempStaffPassword = credEmail?.metadata?.temporaryPassword;
+    assert(!!tempStaffPassword, "Secure temporary password dispatched via email provider");
+
     // Log in as Pharmacist
     const loginPharmA = await req("POST", "/auth/login", {
       email: "sarah_pharmacist@qapims.com",
-      password: "ChangeMe123!"
+      password: tempStaffPassword
     });
-    assert(loginPharmA.ok, "Staff Pharmacist can log in with initial credentials");
+    assert(loginPharmA.ok, "Staff Pharmacist can log in with generated temporary credentials");
     tokenPharmacistA = loginPharmA.data.data?.accessToken;
+
+    // Request OTP for staff update
+    await req("POST", "/staff/send-otp", { action: "update", staffId: staffAId }, tokenAdminA);
+    const staffUpdateOtp = emailService.getLastSentEmail()?.metadata?.otp;
 
     // Update staff details
     const updateStaffRes = await req("PUT", `/staff/${staffAId}`, {
@@ -294,24 +320,34 @@ async function runQaVerificationSuite() {
       position: "Senior Pharmacist",
       department: "Dispensing",
       salary: 45000,
-      status: "Active"
+      status: "Active",
+      otp: staffUpdateOtp
     }, tokenAdminA);
-    assert(updateStaffRes.ok, "Admin updates staff record -> 200");
+    assert(updateStaffRes.ok, "Admin updates staff record with OTP -> 200");
     const updatedStaffUser = await User.findOne({ email: "sarah_pharmacist@qapims.com" });
     assert(updatedStaffUser.name === "Sarah Senior Pharmacist", "Staff name update synced to users collection");
+
+    // Request OTP for temporary staff creation
+    await req("POST", "/staff/send-otp", { action: "create" }, tokenAdminA);
+    const tempStaffOtp = emailService.getLastSentEmail()?.metadata?.otp;
 
     // Add temporary staff and delete
     const tempStaffRes = await req("POST", "/staff", {
       name: "Temp Pharmacist",
       email: "temp_pharmacist@qapims.com",
       position: "Pharmacist",
-      department: "Dispensing"
+      department: "Dispensing",
+      otp: tempStaffOtp
     }, tokenAdminA);
     const tempStaffId = tempStaffRes.data.data?.id || tempStaffRes.data.data?._id;
     assert(tempStaffRes.status === 201, "Admin creates temporary staff member -> 201");
 
-    const deleteStaffRes = await req("DELETE", `/staff/${tempStaffId}`, null, tokenAdminA);
-    assert(deleteStaffRes.ok, "Admin deletes temporary staff member -> 200");
+    // Request OTP for temporary staff delete
+    await req("POST", "/staff/send-otp", { action: "delete", staffId: tempStaffId }, tokenAdminA);
+    const tempDeleteOtp = emailService.getLastSentEmail()?.metadata?.otp;
+
+    const deleteStaffRes = await req("DELETE", `/staff/${tempStaffId}`, { otp: tempDeleteOtp }, tokenAdminA);
+    assert(deleteStaffRes.ok, "Admin deletes temporary staff member with OTP -> 200");
     const deletedUserCheck = await User.findOne({ email: "temp_pharmacist@qapims.com" });
     assert(!deletedUserCheck, "Staff deletion revoked and removed linked user account from MongoDB");
 
@@ -568,11 +604,15 @@ async function runQaVerificationSuite() {
     assert(!tenantBStaff.data.data?.some((s) => (s.id || s._id)?.toString() === staffAId?.toString()), "Tenant B DOES NOT list Tenant A staff");
 
     // Cross-tenant employeeId integrity test: Tenant B staff cannot be used for Tenant A sale
+    await req("POST", "/staff/send-otp", { action: "create" }, tokenAdminB);
+    const staffBOtp = emailService.getLastSentEmail()?.metadata?.otp;
+
     const createStaffB = await req("POST", "/staff", {
       name: "Tenant B Pharmacist",
       email: "pharmacist_b@qapims.com",
       position: "Pharmacist",
-      department: "Dispensing"
+      department: "Dispensing",
+      otp: staffBOtp
     }, tokenAdminB);
     const staffBId = createStaffB.data.data?.id || createStaffB.data.data?._id;
 
@@ -776,28 +816,25 @@ async function runQaVerificationSuite() {
     assert(missingFieldsRes.status === 400, "Missing required request body fields returns 400");
 
     // ══════════════════════════════════════════════════════════════════════════
-    section("13. SEEDED DATABASE & DEMO ACCOUNTS");
+    section("13. AUTHENTICATION INTEGRITY & SECURITY CONTROLS");
     // ══════════════════════════════════════════════════════════════════════════
-    // Demo Admin
-    const demoAdminLogin = await req("POST", "/auth/login", {
-      email: "admin@hospital.com",
-      password: "ChangeMe123!"
+    // Unregistered user login rejection
+    const invalidLogin = await req("POST", "/auth/login", {
+      email: "nonexistent_user@example.com",
+      password: "SomePassword123!"
     });
-    assert(demoAdminLogin.ok, "Seeded demo Admin (admin@hospital.com) logs in successfully");
+    assert(invalidLogin.status === 401, "Unregistered user login returns 401 Unauthorized");
 
-    // Demo Pharmacist
-    const demoPharmLogin = await req("POST", "/auth/login", {
-      email: "jane@hospital.com",
-      password: "ChangeMe123!"
+    // Invalid password login rejection
+    const wrongPassLogin = await req("POST", "/auth/login", {
+      email: "sarah_pharmacist@qapims.com",
+      password: "WrongPassword999!"
     });
-    assert(demoPharmLogin.ok, "Seeded demo Pharmacist (jane@hospital.com) logs in successfully");
+    assert(wrongPassLogin.status === 401, "Incorrect password login returns 401 Unauthorized");
 
-    // Demo Tenant 2 Admin
-    const demoAdmin2Login = await req("POST", "/auth/login", {
-      email: "admin2@hospital.com",
-      password: "ChangeMe123!"
-    });
-    assert(demoAdmin2Login.ok, "Seeded demo Tenant 2 Admin (admin2@hospital.com) logs in successfully");
+    // Rejected access without Bearer token
+    const unauthExport = await req("GET", "/export/transactions", null, null);
+    assert(unauthExport.status === 401, "Protected data export without credentials returns 401 Unauthorized");
 
   } catch (err) {
     logger.error({ message: `Unexpected error in test suite: ${err.message}`, stack: err.stack });

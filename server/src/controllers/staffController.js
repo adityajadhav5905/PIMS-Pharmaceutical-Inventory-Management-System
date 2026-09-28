@@ -117,29 +117,29 @@ export const createStaff = asyncHandler(async (req, res) => {
     }
   }
 
-  // 2. Verify admin OTP (with consume: false so failures don't destroy valid OTP)
-  let verifiedPurpose = null;
-  if (otp) {
-    try {
+  // 2. Verify admin OTP (mandatory)
+  if (!otp || !String(otp).trim()) {
+    return res.status(400).json({ success: false, message: "Security verification code (OTP) is required to create a staff member." });
+  }
+
+  const cleanOtp = String(otp).trim();
+  try {
+    await OtpService.verifyOtp({
+      email: req.user.email,
+      purpose: "STAFF_CREATE",
+      otp: cleanOtp,
+      consume: true
+    });
+  } catch (err) {
+    if (err.message?.includes("No active verification code")) {
       await OtpService.verifyOtp({
         email: req.user.email,
-        purpose: "STAFF_CREATE",
-        otp,
-        consume: false
+        purpose: "STAFF_MUTATION",
+        otp: cleanOtp,
+        consume: true
       });
-      verifiedPurpose = "STAFF_CREATE";
-    } catch (err) {
-      if (err.message?.includes("No active verification code")) {
-        await OtpService.verifyOtp({
-          email: req.user.email,
-          purpose: "STAFF_MUTATION",
-          otp,
-          consume: false
-        });
-        verifiedPurpose = "STAFF_MUTATION";
-      } else {
-        throw err;
-      }
+    } else {
+      throw err;
     }
   }
 
@@ -157,10 +157,11 @@ export const createStaff = asyncHandler(async (req, res) => {
 
   // 4. Automatically provision user credentials if email is provided
   let temporaryPassword = "";
+  let emailDispatched = true;
   if (cleanEmail) {
-    temporaryPassword = (password && password.trim().length >= 6)
+    temporaryPassword = (password && password.trim().length >= 8)
       ? password.trim()
-      : (password === undefined ? "ChangeMe123!" : generateSecureTemporaryPassword());
+      : generateSecureTemporaryPassword();
 
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
     const role = (position || "").toLowerCase().includes("admin") ? "Admin" : "Pharmacist";
@@ -175,7 +176,7 @@ export const createStaff = asyncHandler(async (req, res) => {
         role
       });
     } else {
-      if (password && password.trim().length >= 6) {
+      if (password && password.trim().length >= 8) {
         existingUser.password = passwordHash;
       }
       existingUser.role = role;
@@ -185,31 +186,27 @@ export const createStaff = asyncHandler(async (req, res) => {
     }
 
     // Dispatch temporary credentials to employee's email via emailService
-    const pharmacy = await Pharmacy.findById(pharmacyDbId);
-    await emailService.sendStaffCredentials({
-      to: cleanEmail,
-      staffName: name.trim(),
-      pharmacyName: pharmacy?.name || "Our Pharmacy",
-      email: cleanEmail,
-      temporaryPassword,
-      role
-    });
-  }
-
-  // 5. Successfully completed -> consume OTP
-  if (verifiedPurpose) {
-    await OtpService.verifyOtp({
-      email: req.user.email,
-      purpose: verifiedPurpose,
-      otp,
-      consume: true
-    }).catch(() => {});
+    try {
+      const pharmacy = await Pharmacy.findById(pharmacyDbId);
+      await emailService.sendStaffCredentials({
+        to: cleanEmail,
+        staffName: name.trim(),
+        pharmacyName: pharmacy?.name || "Our Pharmacy",
+        email: cleanEmail,
+        temporaryPassword,
+        role
+      });
+    } catch {
+      emailDispatched = false;
+    }
   }
 
   return res.status(201).json({
     success: true,
     message: cleanEmail
-      ? `Staff member created. Login email: ${cleanEmail}. Temporary credentials dispatched to employee's email.`
+      ? (emailDispatched
+          ? `Staff member created. Login email: ${cleanEmail}. Temporary credentials dispatched to employee's email.`
+          : `Staff member created. Login email: ${cleanEmail}. Note: Email dispatch encountered an SMTP issue.`)
       : "Staff member created successfully",
     data: {
       _id: staff._id,
@@ -237,36 +234,35 @@ export const updateStaff = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Staff member not found" });
   }
 
-  // 1. Verify admin OTP first (non-destructive check)
-  let verifiedPurpose = null;
-  if (otp) {
+  // 1. Verify admin OTP first (mandatory)
+  if (!otp || !String(otp).trim()) {
+    return res.status(400).json({ success: false, message: "Security verification code (OTP) is required to update staff details." });
+  }
+
+  const cleanOtp = String(otp).trim();
+  try {
+    await OtpService.verifyOtp({
+      email: req.user.email,
+      purpose: "STAFF_UPDATE",
+      targetEntityId: staffId,
+      otp: cleanOtp,
+      consume: true
+    });
+  } catch {
     try {
       await OtpService.verifyOtp({
         email: req.user.email,
         purpose: "STAFF_UPDATE",
-        targetEntityId: staffId,
-        otp,
-        consume: false
+        otp: cleanOtp,
+        consume: true
       });
-      verifiedPurpose = "STAFF_UPDATE";
     } catch {
-      try {
-        await OtpService.verifyOtp({
-          email: req.user.email,
-          purpose: "STAFF_UPDATE",
-          otp,
-          consume: false
-        });
-        verifiedPurpose = "STAFF_UPDATE";
-      } catch {
-        await OtpService.verifyOtp({
-          email: req.user.email,
-          purpose: "STAFF_MUTATION",
-          otp,
-          consume: false
-        });
-        verifiedPurpose = "STAFF_MUTATION";
-      }
+      await OtpService.verifyOtp({
+        email: req.user.email,
+        purpose: "STAFF_MUTATION",
+        otp: cleanOtp,
+        consume: true
+      });
     }
   }
 
@@ -295,22 +291,12 @@ export const updateStaff = asyncHandler(async (req, res) => {
         if (status) {
           user.isActive = status === "Active";
         }
-        if (password && password.trim().length >= 6) {
+        if (password && password.trim().length >= 8) {
           user.password = await bcrypt.hash(password.trim(), 10);
         }
         await user.save();
       }
     }
-  }
-
-  // Consume OTP on success
-  if (verifiedPurpose) {
-    await OtpService.verifyOtp({
-      email: req.user.email,
-      purpose: verifiedPurpose,
-      otp,
-      consume: true
-    }).catch(() => {});
   }
 
   return res.json({
@@ -339,36 +325,35 @@ export const deleteStaff = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Staff member not found" });
   }
 
-  // 1. Verify admin OTP first (non-destructive check)
-  let verifiedPurpose = null;
-  if (otp) {
+  // 1. Verify admin OTP first (mandatory)
+  if (!otp || !String(otp).trim()) {
+    return res.status(400).json({ success: false, message: "Security verification code (OTP) is required to delete a staff member." });
+  }
+
+  const cleanOtp = String(otp).trim();
+  try {
+    await OtpService.verifyOtp({
+      email: req.user.email,
+      purpose: "STAFF_DELETE",
+      targetEntityId: staffId,
+      otp: cleanOtp,
+      consume: true
+    });
+  } catch {
     try {
       await OtpService.verifyOtp({
         email: req.user.email,
         purpose: "STAFF_DELETE",
-        targetEntityId: staffId,
-        otp,
-        consume: false
+        otp: cleanOtp,
+        consume: true
       });
-      verifiedPurpose = "STAFF_DELETE";
     } catch {
-      try {
-        await OtpService.verifyOtp({
-          email: req.user.email,
-          purpose: "STAFF_DELETE",
-          otp,
-          consume: false
-        });
-        verifiedPurpose = "STAFF_DELETE";
-      } catch {
-        await OtpService.verifyOtp({
-          email: req.user.email,
-          purpose: "STAFF_MUTATION",
-          otp,
-          consume: false
-        });
-        verifiedPurpose = "STAFF_MUTATION";
-      }
+      await OtpService.verifyOtp({
+        email: req.user.email,
+        purpose: "STAFF_MUTATION",
+        otp: cleanOtp,
+        consume: true
+      });
     }
   }
 
@@ -377,16 +362,6 @@ export const deleteStaff = asyncHandler(async (req, res) => {
   // Also remove user credentials if exists
   if (staff.email) {
     await User.deleteMany({ email: staff.email, pharmacyId: pharmacyDbId });
-  }
-
-  // Consume OTP on success
-  if (verifiedPurpose) {
-    await OtpService.verifyOtp({
-      email: req.user.email,
-      purpose: verifiedPurpose,
-      otp,
-      consume: true
-    }).catch(() => {});
   }
 
   return res.json({ success: true, message: "Staff member deleted successfully" });

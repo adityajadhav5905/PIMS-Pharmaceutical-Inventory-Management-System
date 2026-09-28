@@ -406,7 +406,7 @@ export const sellStock = asyncHandler(async (req, res) => {
     {
       $inc: { currentStock: -qty }
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!updatedBatch) {
@@ -423,21 +423,28 @@ export const sellStock = asyncHandler(async (req, res) => {
   const totalRevenue = unitSell * qty;
   const profit = totalRevenue - totalCost;
 
-  // Create Transaction
-  const transaction = await Transaction.create({
-    pharmacyId: pharmacyDbId,
-    medicineId: medicine?._id,
-    inventoryId: updatedBatch._id,
-    type: "OUT",
-    quantity: qty,
-    unitBuyPrice: unitBuy,
-    unitSellPrice: unitSell,
-    totalCost,
-    totalRevenue,
-    profit,
-    employeeId: verifiedStaff ? verifiedStaff._id : null,
-    note: note || ""
-  });
+  // Create Transaction with rollback protection
+  let transaction;
+  try {
+    transaction = await Transaction.create({
+      pharmacyId: pharmacyDbId,
+      medicineId: medicine?._id,
+      inventoryId: updatedBatch._id,
+      type: "OUT",
+      quantity: qty,
+      unitBuyPrice: unitBuy,
+      unitSellPrice: unitSell,
+      totalCost,
+      totalRevenue,
+      profit,
+      employeeId: verifiedStaff ? verifiedStaff._id : null,
+      note: note || ""
+    });
+  } catch (err) {
+    // Rollback inventory decrement if transaction record creation fails
+    await Inventory.findByIdAndUpdate(updatedBatch._id, { $inc: { currentStock: qty } });
+    throw err;
+  }
 
   // Update staff total sales if valid employeeId provided
   if (verifiedStaff) {
@@ -594,20 +601,29 @@ export const createTransaction = asyncHandler(async (req, res) => {
     }
   }
 
-  const transaction = await Transaction.create({
-    pharmacyId: pharmacyDbId,
-    medicineId: med._id,
-    inventoryId: batchDoc ? batchDoc._id : null,
-    type,
-    quantity: qty,
-    unitBuyPrice: buy,
-    unitSellPrice: sell,
-    totalCost,
-    totalRevenue,
-    profit,
-    employeeId: verifiedStaff ? verifiedStaff._id : null,
-    note: note || ""
-  });
+  let transaction;
+  try {
+    transaction = await Transaction.create({
+      pharmacyId: pharmacyDbId,
+      medicineId: med._id,
+      inventoryId: batchDoc ? batchDoc._id : null,
+      type,
+      quantity: qty,
+      unitBuyPrice: buy,
+      unitSellPrice: sell,
+      totalCost,
+      totalRevenue,
+      profit,
+      employeeId: verifiedStaff ? verifiedStaff._id : null,
+      note: note || ""
+    });
+  } catch (err) {
+    if (batchDoc) {
+      const rollbackInc = type === "OUT" ? qty : -qty;
+      await Inventory.findByIdAndUpdate(batchDoc._id, { $inc: { currentStock: rollbackInc } });
+    }
+    throw err;
+  }
 
   if (type === "OUT" && verifiedStaff) {
     await Staff.findByIdAndUpdate(verifiedStaff._id, { $inc: { totalSales: totalRevenue } });

@@ -55,13 +55,14 @@ async function runTests() {
       const otp = emailService.getLastSentEmail()?.metadata?.otp;
 
       // 1. Register test admin for concurrency-test-pharmacy with verified OTP
+      const testAdminPassword = "TestConcurrencyAdmin123!";
       const registerRes = await fetch(`${BASE_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: "Test Admin",
           email: "test-concurrency@admin.com",
-          password: "ChangeMe123!",
+          password: testAdminPassword,
           role: "Admin",
           pharmacyId: "concurrency-test-pharmacy",
           otp
@@ -76,7 +77,7 @@ async function runTests() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "test-concurrency@admin.com",
-          password: "ChangeMe123!",
+          password: testAdminPassword,
           pharmacyId: "concurrency-test-pharmacy"
         })
       });
@@ -84,7 +85,18 @@ async function runTests() {
       if (!loginRes.ok) throw new Error(`Login failed: ${loginData.message}`);
       const token = loginData.data.accessToken;
 
-      // 3. Create a Staff member
+      // Request OTP for staff creation
+      await fetch(`${BASE_URL}/staff/send-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: "create" })
+      });
+      const staffOtp = emailService.getLastSentEmail()?.metadata?.otp;
+
+      // 3. Create a Staff member with OTP
       const staffRes = await fetch(`${BASE_URL}/staff`, {
         method: "POST",
         headers: { 
@@ -97,7 +109,8 @@ async function runTests() {
           position: "Employee",
           department: "Dispensing",
           salary: 30000,
-          joinDate: new Date().toISOString()
+          joinDate: new Date().toISOString(),
+          otp: staffOtp
         })
       });
       const staffData = await staffRes.json();

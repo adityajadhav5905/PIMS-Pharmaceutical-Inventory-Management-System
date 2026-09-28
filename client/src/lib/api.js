@@ -92,6 +92,7 @@ const apiCall = async (endpoint, options = {}, isRetry = false) => {
         onTokenRefreshed(newToken);
         return apiCall(endpoint, options, true);
       } else {
+        onTokenRefreshed(null);
         clearAuth();
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
@@ -114,8 +115,11 @@ const apiCall = async (endpoint, options = {}, isRetry = false) => {
 
   const contentType = response.headers.get('content-type') || '';
 
-  if (contentType.includes('text/csv')) {
-    if (!response.ok) throw new Error('Export failed');
+  if (contentType.includes('text/csv') || options.headers?.Accept === 'text/csv') {
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Export failed');
+    }
     return response.blob();
   }
 
@@ -137,26 +141,12 @@ const apiCall = async (endpoint, options = {}, isRetry = false) => {
   return data;
 };
 
-/** Trigger browser download for CSV export endpoints. */
+/** Trigger browser download for CSV export endpoints with 401 refresh & retry support. */
 const downloadCsv = async (endpoint, filename) => {
-  const token = getToken();
-  let response;
+  const blob = await apiCall(endpoint, {
+    headers: { Accept: 'text/csv' }
+  });
 
-  try {
-    response = await fetch(`${API_URL}${endpoint}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      credentials: 'include',
-    });
-  } catch {
-    throw new Error('Cannot reach the server for export.');
-  }
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Download failed');
-  }
-
-  const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

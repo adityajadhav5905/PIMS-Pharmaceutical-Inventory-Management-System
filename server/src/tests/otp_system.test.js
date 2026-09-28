@@ -5,13 +5,19 @@ import bcrypt from "bcryptjs";
 import { Otp, User, Pharmacy, Staff } from "../models/index.js";
 import { OtpService } from "../services/otpService.js";
 import { emailService, MockEmailProvider } from "../services/emailService.js";
-import { generateSecureTemporaryPassword } from "../utils/credentialGenerator.js";
 import app from "../app.js";
 import http from "http";
 
 const TEST_PORT = 5098;
 let server;
 let baseUrl = `http://127.0.0.1:${TEST_PORT}/api/v1`;
+
+const TEST_ADMIN_EMAIL = "otp_suite_admin@testclinic.com";
+const TEST_ADMIN_PASSWORD = "SuiteAdminSecretPass123!";
+const TEST_PHARMACY_SLUG = "otp-suite-pharmacy";
+
+let suitePharmacy;
+let suiteAdminUser;
 
 const request = async (path, options = {}) => {
   const url = `${baseUrl}${path}`;
@@ -32,12 +38,45 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     if (mongoose.connection.readyState === 0) {
       await mongoose.connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/pims");
     }
+
+    // Set up test pharmacy and admin user
+    await Pharmacy.deleteOne({ slug: TEST_PHARMACY_SLUG });
+    suitePharmacy = await Pharmacy.create({
+      slug: TEST_PHARMACY_SLUG,
+      name: "OTP Test Pharmacy"
+    });
+
+    await User.deleteMany({ email: TEST_ADMIN_EMAIL });
+    const hashedPassword = await bcrypt.hash(TEST_ADMIN_PASSWORD, 10);
+    suiteAdminUser = await User.create({
+      pharmacyId: suitePharmacy._id,
+      name: "OTP Test Admin",
+      email: TEST_ADMIN_EMAIL,
+      password: hashedPassword,
+      role: "Admin"
+    });
+
+    await Staff.create({
+      pharmacyId: suitePharmacy._id,
+      name: "OTP Test Admin",
+      email: TEST_ADMIN_EMAIL,
+      position: "System Admin",
+      department: "Management",
+      status: "Active"
+    });
+
     server = http.createServer(app);
     await new Promise((resolve) => server.listen(TEST_PORT, resolve));
   });
 
   after(async () => {
     if (server) await new Promise((resolve) => server.close(resolve));
+    if (suitePharmacy) {
+      await User.deleteMany({ pharmacyId: suitePharmacy._id });
+      await Staff.deleteMany({ pharmacyId: suitePharmacy._id });
+      await Pharmacy.deleteOne({ _id: suitePharmacy._id });
+    }
+    await Otp.deleteMany({});
     await mongoose.connection.close();
   });
 
@@ -68,8 +107,8 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     const dbRecord = await Otp.findOne({ email, purpose: "PHARMACY_REGISTRATION" });
     assert.ok(dbRecord);
     assert.ok(dbRecord.hashedOtp);
-    assert.notEqual(dbRecord.hashedOtp, sentOtp); // Must be hashed!
-    assert.ok(dbRecord.hashedOtp.startsWith("$2")); // Valid bcrypt hash prefix
+    assert.notEqual(dbRecord.hashedOtp, sentOtp);
+    assert.ok(dbRecord.hashedOtp.startsWith("$2"));
     assert.equal(await bcrypt.compare(sentOtp, dbRecord.hashedOtp), true);
 
     // Verify 5-minute expiry
@@ -176,7 +215,7 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     // 1. Log in as admin
     const loginRes = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: "admin@hospital.com", password: "ChangeMe123!" })
+      body: JSON.stringify({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD })
     });
     assert.equal(loginRes.status, 200);
     const token = loginRes.data.data.accessToken;
@@ -226,19 +265,113 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     assert.equal(staffLogin.data.data.user.email, staffEmail);
   });
 
-  it("6. Staff Update & Delete Flow: requires and verifies OTP", async () => {
-    // 1. Log in as admin
+  it("6. Staff Creation Rejection: fails with 400 on missing, empty, or invalid OTP", async () => {
     const loginRes = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: "admin@hospital.com", password: "ChangeMe123!" })
+      body: JSON.stringify({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD })
     });
     const token = loginRes.data.data.accessToken;
 
-    const adminUser = await User.findOne({ email: "admin@hospital.com" });
+    // Missing OTP
+    const resNoOtp = await request("/staff", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: "Staff Missing OTP",
+        email: `missing-otp-${Date.now()}@testclinic.com`,
+        position: "Pharmacist"
+      })
+    });
+    assert.equal(resNoOtp.status, 400);
+    assert.match(resNoOtp.data.message, /OTP.*required/i);
+
+    // Empty string OTP
+    const resEmptyOtp = await request("/staff", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: "Staff Empty OTP",
+        email: `empty-otp-${Date.now()}@testclinic.com`,
+        position: "Pharmacist",
+        otp: "   "
+      })
+    });
+    assert.equal(resEmptyOtp.status, 400);
+    assert.match(resEmptyOtp.data.message, /OTP.*required/i);
+
+    // Invalid OTP
+    const resInvalidOtp = await request("/staff", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: "Staff Invalid OTP",
+        email: `invalid-otp-${Date.now()}@testclinic.com`,
+        position: "Pharmacist",
+        otp: "999999"
+      })
+    });
+    assert.equal(resInvalidOtp.status, 400);
+  });
+
+  it("7. Staff Update & Delete Rejection: fails with 400 on missing or invalid OTP", async () => {
+    const loginRes = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD })
+    });
+    const token = loginRes.data.data.accessToken;
+
+    const staff = await Staff.create({
+      pharmacyId: suitePharmacy._id,
+      name: "Otp Guard Staff",
+      email: `guard-staff-${Date.now()}@testclinic.com`,
+      position: "Pharmacist"
+    });
+
+    // Update with missing OTP
+    const updateNoOtp = await request(`/staff/${staff._id}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name: "Updated Without OTP" })
+    });
+    assert.equal(updateNoOtp.status, 400);
+    assert.match(updateNoOtp.data.message, /OTP.*required/i);
+
+    // Update with invalid OTP
+    const updateBadOtp = await request(`/staff/${staff._id}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name: "Updated Bad OTP", otp: "000000" })
+    });
+    assert.equal(updateBadOtp.status, 400);
+
+    // Delete with missing OTP
+    const deleteNoOtp = await request(`/staff/${staff._id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    assert.equal(deleteNoOtp.status, 400);
+    assert.match(deleteNoOtp.data.message, /OTP.*required/i);
+
+    // Delete with invalid OTP
+    const deleteBadOtp = await request(`/staff/${staff._id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ otp: "000000" })
+    });
+    assert.equal(deleteBadOtp.status, 400);
+  });
+
+  it("8. Staff Update & Delete Flow: requires and verifies valid OTP", async () => {
+    // 1. Log in as admin
+    const loginRes = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD })
+    });
+    const token = loginRes.data.data.accessToken;
 
     // Create temporary staff
     const staff = await Staff.create({
-      pharmacyId: adminUser.pharmacyId,
+      pharmacyId: suitePharmacy._id,
       name: "Temporary Worker",
       email: `temp-${Date.now()}@hospital.com`,
       position: "Pharmacist"
@@ -278,11 +411,11 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     assert.equal(deleteRes.status, 200);
   });
 
-  it("7. Settings Profile & Password Change Flow: requires and verifies purpose-based OTP", async () => {
+  it("9. Settings Profile & Password Change Flow: requires and verifies purpose-based OTP", async () => {
     // 1. Log in
     const loginRes = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: "admin@hospital.com", password: "ChangeMe123!" })
+      body: JSON.stringify({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD })
     });
     const token = loginRes.data.data.accessToken;
 
@@ -312,12 +445,13 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     const passOtp = emailService.getLastSentEmail().metadata.otp;
 
     // 5. Update Password with OTP
+    const newPassword = "NewSecretPassword123!";
     const updatePassRes = await request("/auth/profile", {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        currentPassword: "ChangeMe123!",
-        newPassword: "NewSecretPassword123!",
+        currentPassword: TEST_ADMIN_PASSWORD,
+        newPassword,
         otp: passOtp
       })
     });
@@ -326,13 +460,8 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     // 6. Verify login works with new password
     const newLogin = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: "admin@hospital.com", password: "NewSecretPassword123!" })
+      body: JSON.stringify({ email: TEST_ADMIN_EMAIL, password: newPassword })
     });
     assert.equal(newLogin.status, 200);
-
-    // Restore original demo password
-    const user = await User.findOne({ email: "admin@hospital.com" });
-    user.password = await bcrypt.hash("ChangeMe123!", 10);
-    await user.save();
   });
 });

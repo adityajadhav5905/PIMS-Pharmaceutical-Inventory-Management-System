@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { connectDb, disconnectDb } from "./db.js";
 import logger from "../utils/logger.js";
+import { generateSecureTemporaryPassword } from "../utils/credentialGenerator.js";
 import {
   Pharmacy,
   User,
@@ -15,23 +16,17 @@ import {
 } from "../models/index.js";
 
 async function seed() {
-  const isProd = (process.env.NODE_ENV || "").toLowerCase() === "production";
-
-  if (isProd && process.env.ALLOW_PROD_SEED !== "true") {
+  if (process.env.NODE_ENV === "production") {
     logger.error({
-      message: "FATAL: Database seeding is blocked in PRODUCTION environment to prevent data loss. If you intentionally wish to seed demo data in production, set ALLOW_PROD_SEED=true."
+      message: "FATAL: Database seeding is completely disabled in PRODUCTION environment to prevent data loss."
     });
     process.exit(1);
   }
 
-  logger.warn({
-    message: "NOTICE: Seeding uses publicly known demo credentials ('ChangeMe123!'). This should NEVER be used for production customer data."
-  });
-
-  logger.info({ message: "Connecting to MongoDB for seeding multi-tenant data..." });
+  logger.info({ message: "Connecting to MongoDB for isolated test dataset initialization..." });
   await connectDb();
 
-  logger.info({ message: "Clearing existing MongoDB collections..." });
+  logger.info({ message: "Initializing test environment collections..." });
   await Promise.all([
     Pharmacy.deleteMany({}),
     User.deleteMany({}),
@@ -45,7 +40,8 @@ async function seed() {
     SupportTicket.deleteMany({})
   ]);
 
-  const passwordHash = await bcrypt.hash("ChangeMe123!", 10);
+  const testSeedPassword = process.env.TEST_SEED_PASSWORD || generateSecureTemporaryPassword();
+  const passwordHash = await bcrypt.hash(testSeedPassword, 10);
   const today = new Date();
 
   const pharmaciesData = [

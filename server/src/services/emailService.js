@@ -84,16 +84,20 @@ export class MockEmailProvider extends BaseEmailProvider {
 
     this.sentEmails.push(emailRecord);
 
-    logger.info(`══════════════════════════════════════════════════════════════════════════`);
-    logger.info(`[Email Service - Mock Provider]`);
-    logger.info(`To:        ${mailOptions.to}`);
-    logger.info(`Subject:   ${mailOptions.subject}`);
-    logger.info(`Timestamp: ${timestamp}`);
-    if (mailOptions.metadata) {
-      logger.info(`Metadata:  ${JSON.stringify(mailOptions.metadata)}`);
+    if (env.nodeEnv !== "production") {
+      logger.info(`══════════════════════════════════════════════════════════════════════════`);
+      logger.info(`[Email Service - Mock Provider]`);
+      logger.info(`To:        ${mailOptions.to}`);
+      logger.info(`Subject:   ${mailOptions.subject}`);
+      logger.info(`Timestamp: ${timestamp}`);
+      if (mailOptions.metadata) {
+        logger.info(`Metadata:  ${JSON.stringify(mailOptions.metadata)}`);
+      }
+      logger.info(`Body:\n${mailOptions.text || mailOptions.html}`);
+      logger.info(`══════════════════════════════════════════════════════════════════════════`);
+    } else {
+      logger.warn(`[Email Service] Mock provider active in production. Email to ${mailOptions.to} (${mailOptions.subject}) not dispatched to real inbox. Configure SMTP credentials.`);
     }
-    logger.info(`Body:\n${mailOptions.text || mailOptions.html}`);
-    logger.info(`══════════════════════════════════════════════════════════════════════════`);
 
     return {
       success: true,

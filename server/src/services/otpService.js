@@ -85,8 +85,7 @@ export class OtpService {
       success: true,
       message: `A 6-digit verification code has been sent to ${cleanEmail}. Valid for ${expiryMinutes} minutes.`,
       expiresInMinutes: expiryMinutes,
-      purpose,
-      otp: rawOtp
+      purpose
     };
   }
 
