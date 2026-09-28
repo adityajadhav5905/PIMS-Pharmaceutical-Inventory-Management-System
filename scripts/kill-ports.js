@@ -1,6 +1,6 @@
 const { execSync } = require("child_process");
 
-const ports = [5000, 5173, 5174, 8000];
+const ports = [5000, 5173, 5174];
 
 console.log("Checking and freeing required ports before starting...");
 

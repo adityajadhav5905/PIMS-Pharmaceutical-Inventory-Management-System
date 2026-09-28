@@ -1,7 +1,7 @@
 import { Medicine, Inventory, Transaction, Alert, Prediction } from "../models/index.js";
 import { getPharmacyDbId } from "../utils/tenantContext.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { requestMlPrediction } from "../services/mlService.js";
+import { calculateDemandForecast } from "../services/demandForecastService.js";
 
 export const VALID_ATC_CATEGORIES = ["M01AB", "M01AE", "N02BA", "N02BE", "N05B", "N05C", "R03", "R06"];
 
@@ -97,7 +97,7 @@ export const calculatePharmacyBaseline = async (pharmacyDbId, medicineId, initia
 };
 
 /**
- * Generate demand forecast for a medicine using ML service or fallback.
+ * Generate seasonal demand forecast for a medicine using monthly seasonal factors and pharmacy baseline.
  */
 export const runPrediction = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
@@ -131,8 +131,8 @@ export const runPrediction = asyncHandler(async (req, res) => {
   const batches = await Inventory.find({ medicineId: medicine._id, pharmacyId: pharmacyDbId });
   const currentStock = batches.reduce((sum, b) => sum + (b.currentStock || 0), 0);
 
-  // 5. Call ML microservice
-  const mlResponse = await requestMlPrediction({
+  // 5. Calculate seasonal demand forecast
+  const forecastResponse = await calculateDemandForecast({
     medicine_id: medicine._id.toString(),
     category: atcCategory,
     target_month: nextMonth,
@@ -140,18 +140,18 @@ export const runPrediction = asyncHandler(async (req, res) => {
     pharmacy_baseline: pharmacyBaseline
   });
 
-  const normalizedFactor = Number(mlResponse.normalized_demand_factor) || 1.0;
-  const totalDemand = Number(mlResponse.total_demand);
-  const confidence = Number(mlResponse.confidence) || 0.80;
+  const normalizedFactor = Number(forecastResponse.normalized_demand_factor) || 1.0;
+  const totalDemand = Number(forecastResponse.total_demand);
+  const confidence = Number(forecastResponse.confidence) || 0.80;
   const recommendedStock = Math.ceil(totalDemand * 1.2);
 
   // 6. Save / Update prediction history in MongoDB
   await Prediction.findOneAndUpdate(
     { pharmacyId: pharmacyDbId, medicineId: medicine._id },
     {
-      predictedDemand: mlResponse.predicted_demand,
+      predictedDemand: forecastResponse.predicted_demand,
       confidence,
-      source: mlResponse.source,
+      source: forecastResponse.source,
       predictionDate: new Date()
     },
     { upsert: true, returnDocument: "after" }
@@ -193,10 +193,10 @@ export const runPrediction = asyncHandler(async (req, res) => {
       completedMonthsUsed: baselineInfo.completedMonthsCount,
       normalizedDemandFactor: normalizedFactor,
       predictedDemand: totalDemand,
-      predictedDemandArray: mlResponse.predicted_demand,
+      predictedDemandArray: forecastResponse.predicted_demand,
       recommendedStock,
       confidence,
-      source: mlResponse.source,
+      source: forecastResponse.source,
       periods,
       targetMonth: nextMonth,
       predictedDate: predictedDate.toLocaleDateString()

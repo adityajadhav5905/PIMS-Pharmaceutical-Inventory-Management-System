@@ -25,7 +25,6 @@ const env = {
   refreshSecret: process.env.JWT_REFRESH_SECRET || (nodeEnv === "test" ? "test_refresh_secret_64_bytes_00000000000000000000000000000000" : "dev_refresh_secret_64_bytes_00000000000000000000000000000000"),
   accessExpiry: process.env.JWT_ACCESS_EXPIRY || "15m",
   refreshExpiry: process.env.JWT_REFRESH_EXPIRY || "7d",
-  mlServiceUrl: process.env.ML_SERVICE_URL || "http://localhost:8000",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   smtpHost: process.env.SMTP_HOST || "smtp.gmail.com",
   smtpPort: Number(process.env.SMTP_PORT || 587),
