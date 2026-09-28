@@ -53,6 +53,15 @@ jobs:
         run: npm ci
         working-directory: server
 
+      - name: Seed Test Database
+        run: npm run seed
+        working-directory: server
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://127.0.0.1:27017/pims_test
+          JWT_ACCESS_SECRET: test_ci_access_secret_64_bytes_00000000000000000000000000000000
+          JWT_REFRESH_SECRET: test_ci_refresh_secret_64_bytes_00000000000000000000000000000000
+
       - name: Run Test Suite
         run: npm run test:all
         working-directory: server
