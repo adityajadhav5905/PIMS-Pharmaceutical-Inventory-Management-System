@@ -15,8 +15,9 @@
 
 import app from "../app.js";
 import { connectDb, disconnectDb } from "../config/db.js";
-import { Pharmacy, User, Medicine, Inventory, Transaction, Alert, Prediction } from "../models/index.js";
+import { Pharmacy, User, Medicine, Inventory, Transaction, Alert, Prediction, Otp } from "../models/index.js";
 import { calculatePharmacyBaseline } from "../controllers/predictionController.js";
+import { emailService, MockEmailProvider } from "../services/emailService.js";
 import logger from "../utils/logger.js";
 
 const PORT = 5065;
@@ -63,10 +64,14 @@ const cleanup = async () => {
     ]);
   }
   await User.deleteMany({ email: "forecast_admin@qapims.com" });
+  await Otp.deleteMany({});
 };
 
 async function runForecastingSuite() {
   logger.info({ message: "Starting PIMS ML Forecasting Integration Test Suite..." });
+
+  emailService.setProvider(new MockEmailProvider());
+  emailService.clearSentEmails();
 
   await connectDb();
   await cleanup();
@@ -81,11 +86,19 @@ async function runForecastingSuite() {
 
   try {
     // 1. Setup Pharmacy & Admin Login
+    await req("POST", "/auth/send-registration-otp", {
+      name: "Forecast Admin",
+      email: "forecast_admin@qapims.com",
+      pharmacyId: TEST_SLUG
+    });
+    const otp = emailService.getLastSentEmail()?.metadata?.otp;
+
     const regRes = await req("POST", "/auth/register", {
       name: "Forecast Admin",
       email: "forecast_admin@qapims.com",
       password: "Password123!",
-      pharmacyId: TEST_SLUG
+      pharmacyId: TEST_SLUG,
+      otp
     });
     assert(regRes.ok, "Register test pharmacy -> 201");
 

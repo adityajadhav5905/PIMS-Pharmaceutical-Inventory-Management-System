@@ -1,6 +1,7 @@
 import app from "../app.js";
 import { connectDb, disconnectDb } from "../config/db.js";
-import { Pharmacy, User, Staff, Medicine, Inventory, Transaction, Alert, Prediction } from "../models/index.js";
+import { Pharmacy, User, Staff, Medicine, Inventory, Transaction, Alert, Prediction, Otp } from "../models/index.js";
+import { emailService, MockEmailProvider } from "../services/emailService.js";
 import logger from "../utils/logger.js";
 
 const PORT = 5051;
@@ -8,6 +9,9 @@ const BASE_URL = `http://127.0.0.1:${PORT}/api/v1`;
 
 async function runTests() {
   logger.info({ message: "Starting concurrency integration tests on MongoDB..." });
+
+  emailService.setProvider(new MockEmailProvider());
+  emailService.clearSentEmails();
 
   // Connect to DB
   await connectDb();
@@ -27,6 +31,7 @@ async function runTests() {
         Pharmacy.deleteOne({ _id: pId })
       ]);
     }
+    await Otp.deleteMany({});
   };
 
   // Clean test tenant data
@@ -37,7 +42,19 @@ async function runTests() {
     logger.info({ message: `Test server listening on port ${PORT}` });
 
     try {
-      // 1. Register test admin for concurrency-test-pharmacy
+      // 1. Request Registration OTP
+      await fetch(`${BASE_URL}/auth/send-registration-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Test Admin",
+          email: "test-concurrency@admin.com",
+          pharmacyId: "concurrency-test-pharmacy"
+        })
+      });
+      const otp = emailService.getLastSentEmail()?.metadata?.otp;
+
+      // 1. Register test admin for concurrency-test-pharmacy with verified OTP
       const registerRes = await fetch(`${BASE_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -46,7 +63,8 @@ async function runTests() {
           email: "test-concurrency@admin.com",
           password: "ChangeMe123!",
           role: "Admin",
-          pharmacyId: "concurrency-test-pharmacy"
+          pharmacyId: "concurrency-test-pharmacy",
+          otp
         })
       });
       const registerData = await registerRes.json();

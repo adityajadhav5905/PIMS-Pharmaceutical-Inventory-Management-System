@@ -63,16 +63,7 @@ export const register = asyncHandler(async (req, res) => {
   const cleanSlug = pharmacyId.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-");
   const cleanEmail = email.toLowerCase().trim();
 
-  // 1. Perform OTP verification first
-  if (otp) {
-    await OtpService.verifyOtp({
-      email: cleanEmail,
-      purpose: "PHARMACY_REGISTRATION",
-      otp
-    });
-  }
-
-  // 2. Verify that the pharmacy workspace identifier is not already taken
+  // 1. Verify that the pharmacy workspace identifier is not already taken
   const existingPharmacy = await Pharmacy.findOne({ slug: cleanSlug });
   if (existingPharmacy) {
     return res.status(409).json({
@@ -81,11 +72,22 @@ export const register = asyncHandler(async (req, res) => {
     });
   }
 
-  // 3. Check if email is already registered in the system
+  // 2. Check if email is already registered in the system
   const existingUser = await User.findOne({ email: cleanEmail });
   if (existingUser) {
     return res.status(409).json({ success: false, message: "Email already registered in system" });
   }
+
+  if (!otp || !String(otp).trim()) {
+    return res.status(400).json({ success: false, message: "Verification code (OTP) is required for registration" });
+  }
+
+  // 3. Perform OTP verification (mandatory)
+  await OtpService.verifyOtp({
+    email: cleanEmail,
+    purpose: "PHARMACY_REGISTRATION",
+    otp: String(otp).trim()
+  });
 
   // 4. Create the new pharmacy workspace (creator is assigned Admin)
   const assignedRole = "Admin";
@@ -209,11 +211,12 @@ export const logout = asyncHandler(async (req, res) => {
 
 /**
  * Refresh an expired Access Token.
+ * Accepts refresh token strictly via secure httpOnly cookie.
  */
 export const refresh = asyncHandler(async (req, res) => {
-  const token = req.cookies?.refreshToken || req.body?.refreshToken;
+  const token = req.cookies?.refreshToken;
   if (!token) {
-    return res.status(401).json({ success: false, message: "No refresh token provided" });
+    return res.status(401).json({ success: false, message: "No refresh token provided in HTTP-only cookie" });
   }
 
   try {
@@ -287,7 +290,7 @@ export const getProfile = asyncHandler(async (req, res) => {
 
 /**
  * Update user profile (name, email, password).
- * Validates action-specific OTP before performing database modifications.
+ * Enforces action-specific OTP verification before performing database modifications.
  */
 export const updateProfile = asyncHandler(async (req, res) => {
   const { name, email, currentPassword, newPassword, otp, nameOtp, passwordOtp } = req.body;
@@ -297,20 +300,24 @@ export const updateProfile = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "User not found" });
   }
 
-  // 1. If changing name: verify OTP if provided
+  // 1. If changing name: verify OTP (mandatory)
   const isNameChanging = name && name.trim() !== user.name;
-  if (isNameChanging && (nameOtp || otp)) {
+  if (isNameChanging) {
+    const code = nameOtp || otp;
+    if (!code) {
+      return res.status(400).json({ success: false, message: "Verification code (OTP) is required to update account name" });
+    }
     await OtpService.verifyOtp({
       email: user.email,
       purpose: "CHANGE_NAME",
-      otp: nameOtp || otp
+      otp: code
     }).catch(async (err) => {
       // Fallback to SETTINGS_UPDATE if generated under generic settings purpose
       if (err.message?.includes("No active verification code")) {
         await OtpService.verifyOtp({
           email: user.email,
           purpose: "SETTINGS_UPDATE",
-          otp: nameOtp || otp
+          otp: code
         });
       } else {
         throw err;
@@ -318,7 +325,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
     });
   }
 
-  // 2. If changing password: verify current password + verify OTP if provided
+  // 2. If changing password: verify current password + verify OTP (mandatory)
   if (newPassword) {
     if (!currentPassword) {
       return res.status(400).json({ success: false, message: "Current password is required to set new password" });
@@ -328,23 +335,26 @@ export const updateProfile = asyncHandler(async (req, res) => {
       return res.status(400).json({ success: false, message: "Current password is incorrect" });
     }
 
-    if (passwordOtp || otp) {
-      await OtpService.verifyOtp({
-        email: user.email,
-        purpose: "CHANGE_PASSWORD",
-        otp: passwordOtp || otp
-      }).catch(async (err) => {
-        if (err.message?.includes("No active verification code")) {
-          await OtpService.verifyOtp({
-            email: user.email,
-            purpose: "SETTINGS_UPDATE",
-            otp: passwordOtp || otp
-          });
-        } else {
-          throw err;
-        }
-      });
+    const code = passwordOtp || otp;
+    if (!code) {
+      return res.status(400).json({ success: false, message: "Verification code (OTP) is required to change password" });
     }
+
+    await OtpService.verifyOtp({
+      email: user.email,
+      purpose: "CHANGE_PASSWORD",
+      otp: code
+    }).catch(async (err) => {
+      if (err.message?.includes("No active verification code")) {
+        await OtpService.verifyOtp({
+          email: user.email,
+          purpose: "SETTINGS_UPDATE",
+          otp: code
+        });
+      } else {
+        throw err;
+      }
+    });
 
     user.password = await bcrypt.hash(newPassword, 10);
   }

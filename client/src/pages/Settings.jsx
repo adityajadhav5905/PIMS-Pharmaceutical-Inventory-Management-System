@@ -152,6 +152,16 @@ export default function Settings() {
       return;
     }
 
+    if (isChangingName && !nameOtp.trim()) {
+      setError('Please request and enter your 6-digit Name Change verification code.');
+      return;
+    }
+
+    if (isChangingPassword && !passwordOtp.trim()) {
+      setError('Please request and enter your 6-digit Password Change verification code.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -160,16 +170,14 @@ export default function Settings() {
         email: formData.email
       };
 
-      if (isChangingName && nameOtp.trim()) {
+      if (isChangingName) {
         updateData.nameOtp = nameOtp.trim();
       }
 
       if (isChangingPassword) {
         updateData.currentPassword = formData.currentPassword;
         updateData.newPassword = formData.newPassword;
-        if (passwordOtp.trim()) {
-          updateData.passwordOtp = passwordOtp.trim();
-        }
+        updateData.passwordOtp = passwordOtp.trim();
       }
 
       const response = await api.updateProfile(updateData);

@@ -6,7 +6,7 @@ export const registerSchema = Joi.object({
   password: Joi.string().min(8).required(),
   role: Joi.string().valid("Admin", "Pharmacist").optional(),
   pharmacyId: Joi.string().min(2).required(),
-  otp: Joi.string().allow("").optional()
+  otp: Joi.string().trim().required()
 });
 
 export const loginSchema = Joi.object({

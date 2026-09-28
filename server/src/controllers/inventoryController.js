@@ -384,6 +384,18 @@ export const sellStock = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: "Cannot sell expired stock." });
   }
 
+  // Verify staff employee belongs to current pharmacy tenant BEFORE modifying stock
+  let verifiedStaff = null;
+  if (employeeId) {
+    verifiedStaff = await Staff.findOne({ _id: employeeId, pharmacyId: pharmacyDbId });
+    if (!verifiedStaff) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or unauthorized employee ID for this pharmacy workspace."
+      });
+    }
+  }
+
   // Atomic decrement: only succeed if currentStock >= qty
   const updatedBatch = await Inventory.findOneAndUpdate(
     {
@@ -423,13 +435,13 @@ export const sellStock = asyncHandler(async (req, res) => {
     totalCost,
     totalRevenue,
     profit,
-    employeeId: employeeId || null,
+    employeeId: verifiedStaff ? verifiedStaff._id : null,
     note: note || ""
   });
 
-  // Update staff total sales if employeeId provided
-  if (employeeId) {
-    await Staff.findByIdAndUpdate(employeeId, { $inc: { totalSales: totalRevenue } });
+  // Update staff total sales if valid employeeId provided
+  if (verifiedStaff) {
+    await Staff.findByIdAndUpdate(verifiedStaff._id, { $inc: { totalSales: totalRevenue } });
   }
 
   // Evaluate alerts after stock decrement
@@ -532,6 +544,18 @@ export const createTransaction = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Medicine not found." });
   }
 
+  // Verify staff employee belongs to current pharmacy tenant
+  let verifiedStaff = null;
+  if (employeeId) {
+    verifiedStaff = await Staff.findOne({ _id: employeeId, pharmacyId: pharmacyDbId });
+    if (!verifiedStaff) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or unauthorized employee ID for this pharmacy workspace."
+      });
+    }
+  }
+
   const qty = Number(quantity);
   const buy = unitBuyPrice !== undefined ? Number(unitBuyPrice) : (med.buyingPrice || 0);
   const sell = unitSellPrice !== undefined ? Number(unitSellPrice) : (med.sellingPrice || 0);
@@ -539,10 +563,41 @@ export const createTransaction = asyncHandler(async (req, res) => {
   const totalRevenue = sell * qty;
   const profit = totalRevenue - totalCost;
 
+  // If inventoryId is provided, verify ownership and reconcile stock
+  let batchDoc = null;
+  if (inventoryId) {
+    batchDoc = await Inventory.findOne({ _id: inventoryId, pharmacyId: pharmacyDbId });
+    if (!batchDoc) {
+      return res.status(404).json({ success: false, message: "Inventory batch not found in this pharmacy." });
+    }
+
+    if (type === "OUT") {
+      const updated = await Inventory.findOneAndUpdate(
+        { _id: inventoryId, pharmacyId: pharmacyDbId, currentStock: { $gte: qty } },
+        { $inc: { currentStock: -qty } },
+        { returnDocument: "after" }
+      );
+      if (!updated) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock in batch. Available: ${batchDoc.currentStock}.`
+        });
+      }
+      await checkAlertsForBatch(updated._id);
+    } else if (type === "IN") {
+      const updated = await Inventory.findOneAndUpdate(
+        { _id: inventoryId, pharmacyId: pharmacyDbId },
+        { $inc: { currentStock: qty } },
+        { returnDocument: "after" }
+      );
+      await checkAlertsForBatch(updated._id);
+    }
+  }
+
   const transaction = await Transaction.create({
     pharmacyId: pharmacyDbId,
     medicineId: med._id,
-    inventoryId: inventoryId || null,
+    inventoryId: batchDoc ? batchDoc._id : null,
     type,
     quantity: qty,
     unitBuyPrice: buy,
@@ -550,9 +605,13 @@ export const createTransaction = asyncHandler(async (req, res) => {
     totalCost,
     totalRevenue,
     profit,
-    employeeId: employeeId || null,
+    employeeId: verifiedStaff ? verifiedStaff._id : null,
     note: note || ""
   });
+
+  if (type === "OUT" && verifiedStaff) {
+    await Staff.findByIdAndUpdate(verifiedStaff._id, { $inc: { totalSales: totalRevenue } });
+  }
 
   return res.status(201).json({
     success: true,

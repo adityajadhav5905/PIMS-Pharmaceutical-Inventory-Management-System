@@ -21,6 +21,7 @@ import app from "../app.js";
 import { connectDb, disconnectDb } from "../config/db.js";
 import logger from "../utils/logger.js";
 import { checkAlertsForBatch } from "../jobs/alertJob.js";
+import { emailService, MockEmailProvider } from "../services/emailService.js";
 import bcrypt from "bcryptjs";
 import {
   Pharmacy,
@@ -32,7 +33,8 @@ import {
   Alert,
   Prediction,
   UserPreference,
-  SupportTicket
+  SupportTicket,
+  Otp
 } from "../models/index.js";
 
 const PORT = 5055;
@@ -96,10 +98,14 @@ const cleanTenant = async (slug) => {
   await User.deleteMany({
     email: { $in: ["admin_a@qapims.com", "admin_b@qapims.com", "sarah_pharmacist@qapims.com", "staff_two@qapims.com", "different_email@qapims.com"] }
   });
+  await Otp.deleteMany({});
 };
 
 async function runQaVerificationSuite() {
   logger.info({ message: "Starting PIMS Comprehensive QA Verification Suite (MongoDB)..." });
+
+  emailService.setProvider(new MockEmailProvider());
+  emailService.clearSentEmails();
 
   await connectDb();
   await cleanTenant(TENANT_A_SLUG);
@@ -117,11 +123,33 @@ async function runQaVerificationSuite() {
     // ══════════════════════════════════════════════════════════════════════════
     section("1. NEW PHARMACY REGISTRATION & ADMIN CREATION");
     // ══════════════════════════════════════════════════════════════════════════
+    // 1. Request Registration OTP for Tenant A
+    const otpResA = await req("POST", "/auth/send-registration-otp", {
+      name: "Admin QA One",
+      email: "admin_a@qapims.com",
+      pharmacyId: TENANT_A_SLUG
+    });
+    assert(otpResA.status === 200, "POST /auth/send-registration-otp returns 200");
+    const otpA = emailService.getLastSentEmail()?.metadata?.otp;
+    assert(!!otpA, "Registration OTP email dispatched");
+
+    // 2. Reject registration without OTP or bad OTP
+    const badOtpReg = await req("POST", "/auth/register", {
+      name: "Admin QA One",
+      email: "admin_a@qapims.com",
+      password: "Password123!",
+      pharmacyId: TENANT_A_SLUG,
+      otp: "000000"
+    });
+    assert(badOtpReg.status === 400, "Registration with invalid OTP rejected with 400");
+
+    // 3. Register Tenant A with valid OTP
     const regA = await req("POST", "/auth/register", {
       name: "Admin QA One",
       email: "admin_a@qapims.com",
       password: "Password123!",
-      pharmacyId: TENANT_A_SLUG
+      pharmacyId: TENANT_A_SLUG,
+      otp: otpA
     });
     assert(regA.status === 201, "New pharmacy registration returns 201");
     assert(regA.data.success === true, "Registration returns success: true");
@@ -137,11 +165,17 @@ async function runQaVerificationSuite() {
     assert(await bcrypt.compare("Password123!", dbUserA.password), "Bcrypt verification matches password");
 
     // Attempting to register with an existing pharmacy identifier is rejected with 409
+    await req("POST", "/auth/send-registration-otp", {
+      name: "Duplicate Pharmacy Creator",
+      email: "staff_two@qapims.com",
+      pharmacyId: TENANT_A_SLUG
+    });
     const dupSlug = await req("POST", "/auth/register", {
       name: "Duplicate Pharmacy Creator",
       email: "staff_two@qapims.com",
       password: "Password123!",
-      pharmacyId: TENANT_A_SLUG
+      pharmacyId: TENANT_A_SLUG,
+      otp: "123456"
     });
     assert(dupSlug.status === 409, "Public registration with existing pharmacy identifier rejected with 409 (prevents unauthorized workspace joining)");
 
@@ -150,16 +184,25 @@ async function runQaVerificationSuite() {
       name: "Admin Dup Email",
       email: "admin_a@qapims.com",
       password: "Password123!",
-      pharmacyId: "different-slug"
+      pharmacyId: "different-slug",
+      otp: "123456"
     });
     assert(dupEmail.status === 409, "Duplicate email registration rejected with 409");
 
     // Register Tenant B
+    await req("POST", "/auth/send-registration-otp", {
+      name: "Admin QA Two",
+      email: "admin_b@qapims.com",
+      pharmacyId: TENANT_B_SLUG
+    });
+    const otpB = emailService.getLastSentEmail()?.metadata?.otp;
+
     const regB = await req("POST", "/auth/register", {
       name: "Admin QA Two",
       email: "admin_b@qapims.com",
       password: "Password123!",
-      pharmacyId: TENANT_B_SLUG
+      pharmacyId: TENANT_B_SLUG,
+      otp: otpB
     });
     assert(regB.status === 201, "Tenant B registration returns 201");
 
@@ -524,6 +567,43 @@ async function runQaVerificationSuite() {
     const tenantBStaff = await req("GET", "/staff", null, tokenAdminB);
     assert(!tenantBStaff.data.data?.some((s) => (s.id || s._id)?.toString() === staffAId?.toString()), "Tenant B DOES NOT list Tenant A staff");
 
+    // Cross-tenant employeeId integrity test: Tenant B staff cannot be used for Tenant A sale
+    const createStaffB = await req("POST", "/staff", {
+      name: "Tenant B Pharmacist",
+      email: "pharmacist_b@qapims.com",
+      position: "Pharmacist",
+      department: "Dispensing"
+    }, tokenAdminB);
+    const staffBId = createStaffB.data.data?.id || createStaffB.data.data?._id;
+
+    const crossStaffSale = await req("POST", "/inventory/sell", {
+      inventoryId: batchAId,
+      quantity: 1,
+      employeeId: staffBId
+    }, tokenAdminA);
+    assert(crossStaffSale.status === 400, "Selling under Tenant A with Tenant B employeeId rejected with 400");
+
+    // Manual transaction consistency test: OUT decrements stock, IN increments stock
+    const txOutRes = await req("POST", "/inventory/transactions", {
+      medicine: medicineAId,
+      inventoryId: batchAId,
+      type: "OUT",
+      quantity: 5
+    }, tokenAdminA);
+    assert(txOutRes.status === 201, "Manual transaction OUT created -> 201");
+    const batchAfterTxOut = await Inventory.findById(batchAId);
+    assert(batchAfterTxOut.currentStock === 45, "Manual transaction OUT decrements batch stock to 45");
+
+    const txInRes = await req("POST", "/inventory/transactions", {
+      medicine: medicineAId,
+      inventoryId: batchAId,
+      type: "IN",
+      quantity: 5
+    }, tokenAdminA);
+    assert(txInRes.status === 201, "Manual transaction IN created -> 201");
+    const batchAfterTxIn = await Inventory.findById(batchAId);
+    assert(batchAfterTxIn.currentStock === 50, "Manual transaction IN increments batch stock back to 50");
+
     // ══════════════════════════════════════════════════════════════════════════
     section("8. ALERTS & AUTOMATED DEDUPLICATION");
     // ══════════════════════════════════════════════════════════════════════════
@@ -619,18 +699,38 @@ async function runQaVerificationSuite() {
     // ══════════════════════════════════════════════════════════════════════════
     section("11. USER SETTINGS, PREFERENCES & SUPPORT TICKETS");
     // ══════════════════════════════════════════════════════════════════════════
-    // Update profile
-    const updateProf = await req("PUT", "/auth/profile", { name: "Admin A Renamed" }, tokenAdminA);
+    // Reject profile name change without OTP
+    const rejectProfWithoutOtp = await req("PUT", "/auth/profile", { name: "Admin A Renamed" }, tokenAdminA);
+    assert(rejectProfWithoutOtp.status === 400, "PUT /auth/profile name change without OTP rejected with 400");
+
+    // Request settings OTP for CHANGE_NAME
+    await req("POST", "/auth/send-settings-otp", { action: "CHANGE_NAME" }, tokenAdminA);
+    const nameOtp = emailService.getLastSentEmail()?.metadata?.otp;
+
+    // Update profile with OTP
+    const updateProf = await req("PUT", "/auth/profile", { name: "Admin A Renamed", otp: nameOtp }, tokenAdminA);
     assert(updateProf.ok, "PUT /auth/profile returns 200");
     assert(updateProf.data.data?.name === "Admin A Renamed", "Profile name updated in DB");
 
-    // Change Password
-    const updatePass = await req("PUT", "/auth/profile", {
-      name: "Admin A Renamed",
+    // Reject password change without OTP
+    const rejectPassWithoutOtp = await req("PUT", "/auth/profile", {
       currentPassword: "Password123!",
       newPassword: "NewPassword456!"
     }, tokenAdminA);
-    assert(updatePass.ok, "Password updated successfully with valid current password");
+    assert(rejectPassWithoutOtp.status === 400, "PUT /auth/profile password change without OTP rejected with 400");
+
+    // Request settings OTP for CHANGE_PASSWORD
+    await req("POST", "/auth/send-settings-otp", { action: "CHANGE_PASSWORD" }, tokenAdminA);
+    const passOtp = emailService.getLastSentEmail()?.metadata?.otp;
+
+    // Change Password with OTP
+    const updatePass = await req("PUT", "/auth/profile", {
+      name: "Admin A Renamed",
+      currentPassword: "Password123!",
+      newPassword: "NewPassword456!",
+      otp: passOtp
+    }, tokenAdminA);
+    assert(updatePass.ok, "Password updated successfully with valid current password and OTP");
 
     // Login with new password
     const loginWithNewPass = await req("POST", "/auth/login", {

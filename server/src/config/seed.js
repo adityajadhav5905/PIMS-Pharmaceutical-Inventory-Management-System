@@ -15,6 +15,19 @@ import {
 } from "../models/index.js";
 
 async function seed() {
+  const isProd = (process.env.NODE_ENV || "").toLowerCase() === "production";
+
+  if (isProd && process.env.ALLOW_PROD_SEED !== "true") {
+    logger.error({
+      message: "FATAL: Database seeding is blocked in PRODUCTION environment to prevent data loss. If you intentionally wish to seed demo data in production, set ALLOW_PROD_SEED=true."
+    });
+    process.exit(1);
+  }
+
+  logger.warn({
+    message: "NOTICE: Seeding uses publicly known demo credentials ('ChangeMe123!'). This should NEVER be used for production customer data."
+  });
+
   logger.info({ message: "Connecting to MongoDB for seeding multi-tenant data..." });
   await connectDb();
 
