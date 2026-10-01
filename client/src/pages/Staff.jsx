@@ -159,7 +159,7 @@ export default function Staff() {
     setLoading(true);
     setError('');
     try {
-      await api.deleteStaff(deleteModalStaff._id, deleteOtp.trim());
+      await api.deleteStaff(deleteModalStaff._id || deleteModalStaff.id, deleteOtp.trim());
       setSuccessInfo({
         type: 'delete',
         message: `Staff member ${deleteModalStaff.name} deleted successfully.`
@@ -186,7 +186,7 @@ export default function Staff() {
       phone: staff.phone || '',
       status: staff.status
     });
-    setEditingId(staff._id);
+    setEditingId(staff._id || staff.id);
     setOtp('');
     setOtpSent(false);
     setShowModal(true);
@@ -530,7 +530,7 @@ export default function Staff() {
               <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">No staff members found</td></tr>
             ) : (
               staffList.map((staff) => (
-                <tr key={staff._id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <tr key={staff._id || staff.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">{staff.name}</td>
                   <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{staff.email}</td>
                   <td className="px-6 py-4 dark:text-gray-300">{staff.position}</td>

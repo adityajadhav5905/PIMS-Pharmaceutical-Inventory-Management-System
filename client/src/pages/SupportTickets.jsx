@@ -71,7 +71,7 @@ export default function SupportTickets() {
       const updatedTicket = res.data || { ...ticket, status: nextStatus };
 
       setTickets((prev) =>
-        prev.map((t) => (t.id === ticket.id ? { ...t, status: nextStatus } : t))
+        prev.map((t) => (t.id === ticket.id ? updatedTicket : t))
       );
 
       if (selectedTicket && selectedTicket.id === ticket.id) {

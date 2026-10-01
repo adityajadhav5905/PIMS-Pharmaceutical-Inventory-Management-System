@@ -187,7 +187,7 @@ export default function Financials() {
                     ? Math.round((emp.totalProfit / emp.totalRevenue) * 100) 
                     : 0;
                   return (
-                    <tr key={emp._id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <tr key={emp._id || emp.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                       <td className="px-4 py-3">
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{emp.name}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">{emp.email}</div>
@@ -234,7 +234,7 @@ export default function Financials() {
               </thead>
               <tbody>
                 {(data.recentSales || []).map((sale) => (
-                  <tr key={sale._id} className="border-b dark:border-gray-700">
+                  <tr key={sale._id || sale.id} className="border-b dark:border-gray-700">
                     <td className="px-4 py-3">{formatDate(sale.createdAt)}</td>
                     <td className="px-4 py-3">{sale.medicineName}</td>
                     <td className="px-4 py-3 text-right">{sale.quantity}</td>

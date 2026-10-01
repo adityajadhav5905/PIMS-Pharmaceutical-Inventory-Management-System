@@ -33,7 +33,7 @@ const emptyForm = {
 
 /** Inventory management — add/edit batches with medicine details and INR pricing. */
 export default function Inventory() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const initialSearch = searchParams.get('search') || '';
 
   const [inventory, setInventory] = useState([]);

@@ -71,7 +71,7 @@ export default function Predictions() {
     e.preventDefault();
     if (!selectedMedicine) return;
 
-    const med = medicines.find((m) => m._id === selectedMedicine);
+    const med = medicines.find((m) => String(m._id || m.id) === String(selectedMedicine));
     if (!isSupportedCategory(med?.category)) {
       setError(`Cannot forecast demand for "${med?.name}". It is categorized under "${med?.category || 'Other'}", which has no WHO ATC dataset training data.`);
       return;
@@ -96,7 +96,7 @@ export default function Predictions() {
     }
   };
 
-  const selectedMedObj = medicines.find((m) => m._id === selectedMedicine);
+  const selectedMedObj = medicines.find((m) => String(m._id || m.id) === String(selectedMedicine));
   const isMedSupported = isSupportedCategory(selectedMedObj?.category);
 
   return (
@@ -189,7 +189,7 @@ export default function Predictions() {
                     {medicines.map((med) => {
                       const supported = isSupportedCategory(med.category);
                       return (
-                        <option key={med._id} value={med._id}>
+                        <option key={med._id || med.id} value={med._id || med.id}>
                           {med.name} {med.brand ? `(${med.brand})` : ''} — {med.category || 'Other'} {!supported ? '[No Forecast]' : ''}
                         </option>
                       );
