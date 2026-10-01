@@ -162,7 +162,7 @@ CREATE TABLE predictions (
   prediction_date  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   predicted_demand JSON NOT NULL,
   confidence       DECIMAL(5,4) DEFAULT 0.8000,
-  source           VARCHAR(255) DEFAULT 'Time-Series Moving Average (ML Service)',
+  source           VARCHAR(255) DEFAULT 'Deterministic Demand Forecast',
   created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_predictions_pharmacy_medicine (pharmacy_id, medicine_id),

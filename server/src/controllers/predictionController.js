@@ -111,7 +111,7 @@ export const runPrediction = asyncHandler(async (req, res) => {
   if (!atcCategory) {
     return res.status(400).json({
       success: false,
-      message: `AI demand forecasting is not supported for "${medicine.name}". It is categorized under "${medicine.category || 'Other'}", which lacks training data. Predictions are strictly available only for the 8 WHO ATC dataset categories (M01AB, M01AE, N02BA, N02BE, N05B, N05C, R03, R06).`
+      message: `Demand forecasting is not supported for "${medicine.name}". It is categorized under "${medicine.category || 'Other'}", which has no predefined WHO ATC seasonal demand model. Forecasting is strictly available only for the 8 WHO ATC categories (M01AB, M01AE, N02BA, N02BE, N05B, N05C, R03, R06).`
     });
   }
 

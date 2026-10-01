@@ -1,5 +1,5 @@
 /**
- * PIMS Forecasting & Backend Integration Test Suite (MongoDB / ML Service)
+ * PIMS Demand Forecasting & Backend Integration Test Suite (MySQL / Deterministic Forecast Service)
  *
  * Tests all required integration scenarios:
  * 1. New pharmacy with baseline estimate (< 3 completed months)
@@ -8,7 +8,7 @@
  * 4. Incomplete current-month transactions (verified excluded from baseline)
  * 5. Future transactions (verified excluded from baseline)
  * 6. All 8 ATC categories (M01AB, M01AE, N02BA, N02BE, N05B, N05C, R03, R06)
- * 7. Verification that normalized factor matches trained model artifact
+ * 7. Verification that normalized factor matches predefined ATC seasonal table
  * 8. Verification that predicted sales = factor * baseline
  * 9. Inventory comparison & automatic prediction replenishment alert generation
  */
@@ -66,7 +66,7 @@ const cleanup = async () => {
 };
 
 async function runForecastingSuite() {
-  logger.info({ message: "Starting PIMS ML Forecasting Integration Test Suite..." });
+  logger.info({ message: "Starting PIMS Demand Forecasting Integration Test Suite..." });
 
   emailService.setProvider(new MockEmailProvider());
   emailService.clearSentEmails();
@@ -285,13 +285,13 @@ async function runForecastingSuite() {
       type: "LOW_STOCK",
       message: new RegExp(`\\[Prediction\\] Replenishment needed for "${medEstablished.name}"`, "i")
     });
-    assert(!!alertDoc, "Automatic prediction replenishment alert created in MongoDB");
+    assert(!!alertDoc, "Automatic prediction replenishment alert created in MySQL");
     assert(alertDoc.severity === "Medium", "Severity is Medium when stock > 0");
     assert(alertDoc.message.includes(`Current stock: 20 units`), "Alert message contains accurate stock count");
 
     // 7. Verify Prediction History Persistence
     const historyRes = await req("GET", `/predictions/history?medicineId=${medEstablished._id}`, null, token);
-    assert(historyRes.ok && historyRes.data.data.length >= 1, "Prediction history retrieved from MongoDB");
+    assert(historyRes.ok && historyRes.data.data.length >= 1, "Prediction history retrieved from MySQL");
     assert(historyRes.data.data[0].medicineName === "Established Cetirizine", "History contains accurate medicine name");
 
   } catch (err) {

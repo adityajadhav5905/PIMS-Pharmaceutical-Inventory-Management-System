@@ -106,7 +106,7 @@ export default function Help() {
               { q: 'How to add staff?', a: 'Use the Staff page and click "Add Staff" to add new team members.' },
               { q: 'How to record a sale?', a: 'Go to the Sell Stock page, select a batch and quantity, then submit.' },
               { q: 'How to export data?', a: 'Use the Export Data page to download transactions, stock levels, or staff performance as CSV.' },
-              { q: 'How do AI Predictions work?', a: 'Visit the AI Predictions page, select a medicine, choose a forecast period (7–90 days), and click Get Prediction. The system queries the ML microservice or falls back to a statistical estimate.' },
+              { q: 'How does Demand Forecasting work?', a: 'Visit the Demand Forecasting page, select a medicine, choose a forecast period (7–90 days), and click Calculate Forecast. The system computes predicted demand using category seasonal factors and historical sales baselines.' },
             ].map((item, idx) => (
               <details key={idx} className="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
                 <summary className="font-medium text-gray-900 cursor-pointer dark:text-gray-200">{item.q}</summary>

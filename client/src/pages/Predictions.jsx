@@ -73,7 +73,7 @@ export default function Predictions() {
 
     const med = medicines.find((m) => String(m._id || m.id) === String(selectedMedicine));
     if (!isSupportedCategory(med?.category)) {
-      setError(`Cannot forecast demand for "${med?.name}". It is categorized under "${med?.category || 'Other'}", which has no WHO ATC dataset training data.`);
+      setError(`Cannot forecast demand for "${med?.name}". It is categorized under "${med?.category || 'Other'}", which has no predefined WHO ATC seasonal demand model.`);
       return;
     }
 
@@ -104,9 +104,9 @@ export default function Predictions() {
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">AI Demand Forecasting</h1>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Demand Forecasting</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Forecast medicine stock requirements using trained WHO ATC category models
+            Forecast medicine stock requirements using WHO ATC seasonal demand models
           </p>
         </div>
 
@@ -115,13 +115,13 @@ export default function Predictions() {
           <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             <span
               className={`h-2 w-2 rounded-full ${
-                prediction.source === 'ml-service' ? 'bg-emerald-500' : 'bg-amber-500'
+                prediction.source === 'deterministic-forecast' ? 'bg-emerald-500' : 'bg-amber-500'
               }`}
             />
             <span>
               Engine:{' '}
               <strong className="text-slate-900 dark:text-slate-100">
-                {prediction.source === 'ml-service' ? 'ML Model' : 'Statistical Fallback'}
+                {prediction.source === 'deterministic-forecast' ? 'Deterministic Seasonal Model' : 'Baseline Estimation'}
               </strong>
             </span>
           </div>
@@ -208,7 +208,7 @@ export default function Predictions() {
 
                       {!isMedSupported && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-                          <strong>No Forecast Available:</strong> This medicine is categorized under &quot;{selectedMedObj.category || 'Other'}&quot;. AI predictions are only available for the 8 WHO ATC dataset categories.
+                          <strong>No Forecast Available:</strong> This medicine is categorized under &quot;{selectedMedObj.category || 'Other'}&quot;. Demand forecasting is only available for the 8 WHO ATC categories.
                         </div>
                       )}
                     </div>
@@ -395,12 +395,12 @@ export default function Predictions() {
                       <td className="py-2.5 px-3">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                            h.source === 'ml-service'
+                            h.source === 'deterministic-forecast'
                               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
                               : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
                           }`}
                         >
-                          {h.source === 'ml-service' ? 'ML Model' : 'Statistical'}
+                          {h.source === 'deterministic-forecast' ? 'Seasonal Model' : 'Baseline'}
                         </span>
                       </td>
                     </tr>

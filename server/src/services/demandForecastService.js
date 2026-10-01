@@ -71,11 +71,11 @@ export const calculateDemandForecast = async (payloadOrMedId, optionalPeriods) =
     predicted_demand: demandArray,
     total_demand: totalDemand,
     confidence: confidenceScore,
-    source: "ml-service",
+    source: "deterministic-forecast",
     periods,
     target_month: targetMonth
   };
 };
 
 export const getPrediction = calculateDemandForecast;
-export const requestMlPrediction = calculateDemandForecast;
+export const requestDemandForecast = calculateDemandForecast;
