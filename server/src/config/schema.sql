@@ -227,7 +227,7 @@ CREATE TABLE support_tickets (
   FOREIGN KEY (closed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ─── Event to purge expired OTPs (replaces MongoDB TTL index) ────────────────
+-- ─── MySQL Scheduled Event to purge expired OTP records ──────────────────────
 DROP EVENT IF EXISTS purge_expired_otps;
 CREATE EVENT IF NOT EXISTS purge_expired_otps
   ON SCHEDULE EVERY 5 MINUTE

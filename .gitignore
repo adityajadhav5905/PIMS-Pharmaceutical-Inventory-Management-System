@@ -65,3 +65,14 @@ POSTMAN_COLLECTION.json
 POSTMAN_TESTING_GUIDE.txt
 DATABASE_STRUCTURE.txt
 credentials.txt
+
+# Root images
+/*.png
+/*.jpg
+/*.jpeg
+/*.svg
+/*.webp
+/*.gif
+/*.ico
+/*.bmp
+/*.tiff

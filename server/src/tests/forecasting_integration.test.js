@@ -279,7 +279,7 @@ async function runForecastingSuite() {
     assert(predAlertRes.ok, "POST /predictions on low-stock medicine returns 200");
     const predDemand = predAlertRes.data.data.predictedDemand;
 
-    // Verify alert created in MongoDB
+    // Verify alert created in MySQL
     const alertDoc = await Alert.findOne({
       pharmacyId,
       type: "LOW_STOCK",

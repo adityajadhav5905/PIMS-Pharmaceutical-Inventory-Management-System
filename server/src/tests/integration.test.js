@@ -103,7 +103,7 @@ const cleanTenant = async (slug) => {
 };
 
 async function runQaVerificationSuite() {
-  logger.info({ message: "Starting PIMS Comprehensive QA Verification Suite (MongoDB)..." });
+  logger.info({ message: "Starting PIMS Comprehensive QA Verification Suite (MySQL)..." });
 
   emailService.setProvider(new MockEmailProvider());
   emailService.clearSentEmails();
@@ -155,12 +155,12 @@ async function runQaVerificationSuite() {
     assert(regA.status === 201, "New pharmacy registration returns 201");
     assert(regA.data.success === true, "Registration returns success: true");
 
-    // DB Verification: Pharmacy & User documents created & linked in MongoDB
+    // DB Verification: Pharmacy & User records created & linked in MySQL
     const dbPharmA = await Pharmacy.findOne({ slug: TENANT_A_SLUG });
-    assert(!!dbPharmA, "Pharmacy document created in MongoDB with slug");
+    assert(!!dbPharmA, "Pharmacy record created in MySQL with slug");
     const dbUserA = await User.findOne({ email: "admin_a@qapims.com" });
-    assert(!!dbUserA, "Admin user document created in MongoDB");
-    assert(dbUserA.pharmacyId.toString() === dbPharmA._id.toString(), "Admin user correctly linked to Pharmacy ObjectId");
+    assert(!!dbUserA, "Admin user record created in MySQL");
+    assert(dbUserA.pharmacyId.toString() === dbPharmA._id.toString(), "Admin user correctly linked to Pharmacy ID");
     assert(dbUserA.role === "Admin", "Registered pharmacy owner is assigned 'Admin' role");
     assert(dbUserA.password.startsWith("$2"), "Password stored securely as bcrypt hash");
     assert(await bcrypt.compare("Password123!", dbUserA.password), "Bcrypt verification matches password");
@@ -289,7 +289,7 @@ async function runQaVerificationSuite() {
     assert(createStaffA.status === 201, "Admin A creates staff member with OTP -> 201");
     staffAId = createStaffA.data.data?.id || createStaffA.data.data?._id;
 
-    // Verify staff has automatic login user account in MongoDB
+    // Verify staff has automatic login user account in MySQL
     const staffUserInDb = await User.findOne({ email: "sarah_pharmacist@qapims.com" });
     assert(!!staffUserInDb, "Staff creation automatically created linked user login");
     assert(staffUserInDb.role === "Pharmacist", "Linked user has 'Pharmacist' role");
@@ -323,7 +323,7 @@ async function runQaVerificationSuite() {
     }, tokenAdminA);
     assert(updateStaffRes.ok, "Admin updates staff record with OTP -> 200");
     const updatedStaffUser = await User.findOne({ email: "sarah_pharmacist@qapims.com" });
-    assert(updatedStaffUser.name === "Sarah Senior Pharmacist", "Staff name update synced to users collection");
+    assert(updatedStaffUser.name === "Sarah Senior Pharmacist", "Staff name update synced to users table");
 
     // Request OTP for temporary staff creation
     await req("POST", "/staff/send-otp", { action: "create" }, tokenAdminA);
@@ -347,7 +347,7 @@ async function runQaVerificationSuite() {
     const deleteStaffRes = await req("DELETE", `/staff/${tempStaffId}`, { otp: tempDeleteOtp }, tokenAdminA);
     assert(deleteStaffRes.ok, "Admin deletes temporary staff member with OTP -> 200");
     const deletedUserCheck = await User.findOne({ email: "temp_pharmacist@qapims.com" });
-    assert(!deletedUserCheck, "Staff deletion revoked and removed linked user account from MongoDB");
+    assert(!deletedUserCheck, "Staff deletion revoked and removed linked user account from MySQL");
 
     // ══════════════════════════════════════════════════════════════════════════
     section("4. ADMIN VS PHARMACIST ROLE-BASED ACCESS CONTROL (RBAC)");
@@ -456,12 +456,12 @@ async function runQaVerificationSuite() {
     const deleteBatchRes = await req("DELETE", `/inventory/${tempBatchId}`, null, tokenAdminA);
     assert(deleteBatchRes.ok, "Admin deletes temporary batch -> 200");
     const checkBatchGone = await Inventory.findById(tempBatchId);
-    assert(!checkBatchGone, "Batch removed from MongoDB");
+    assert(!checkBatchGone, "Batch removed from MySQL");
 
     const deleteMedSuccess = await req("DELETE", `/inventory/medicines/${tempMedId}`, null, tokenAdminA);
     assert(deleteMedSuccess.ok, "Admin deletes unreferenced medicine -> 200");
     const checkMedGone = await Medicine.findById(tempMedId);
-    assert(!checkMedGone, "Medicine removed from MongoDB");
+    assert(!checkMedGone, "Medicine removed from MySQL");
 
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -477,9 +477,9 @@ async function runQaVerificationSuite() {
     assert(sellRes.status === 201, "Pharmacist sells 5 units -> 201");
     assert(sellRes.data.data?.remainingStock === 25, "Remaining stock correctly decremented to 25");
 
-    // Verify transaction record and staff sales updated in MongoDB
+    // Verify transaction record and staff sales updated in MySQL
     const txDoc = await Transaction.findOne({ inventoryId: batchAId, type: "OUT" });
-    assert(!!txDoc, "Transaction recorded in MongoDB with type 'OUT'");
+    assert(!!txDoc, "Transaction recorded in MySQL with type 'OUT'");
     assert(Number(txDoc.unitSellPrice) === 22.00, "Transaction records accurate unit sell price");
 
     const staffDoc = await Staff.findById(staffAId);
@@ -558,7 +558,7 @@ async function runQaVerificationSuite() {
     }, tokenAdminA);
     assert(restockRes.ok, "Restocking / updating inventory batch stock -> 200");
     const restockedBatch = await Inventory.findById(batchAId);
-    assert(restockedBatch.currentStock === 50, "Restocked stock count persisted in MongoDB");
+    assert(restockedBatch.currentStock === 50, "Restocked stock count persisted in MySQL");
 
 
     // ══════════════════════════════════════════════════════════════════════════

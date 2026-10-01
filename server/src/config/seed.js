@@ -26,7 +26,7 @@ async function seed() {
   logger.info({ message: "Connecting to MySQL for isolated test dataset initialization..." });
   await connectDb();
 
-  logger.info({ message: "Initializing test environment collections..." });
+  logger.info({ message: "Initializing test environment tables..." });
   await SupportTicket.deleteMany({});
   await UserPreference.deleteMany({});
   await Prediction.deleteMany({});

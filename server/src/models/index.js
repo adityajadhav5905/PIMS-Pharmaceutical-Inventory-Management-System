@@ -1,6 +1,6 @@
 /**
  * MySQL Database Access Layer for PIMS.
- * Replaces Mongoose models with parameterized SQL queries via mysql2.
+ * Parameterized SQL queries via mysql2.
  * All functions use the shared connection pool.
  */
 import { getPool } from "../config/db.js";
@@ -60,7 +60,7 @@ export const toCamelRows = (rows) => rows.map(toCamel);
 export const toCamelRow = toCamel;
 
 /**
- * Helper to build dynamic WHERE clauses from MongoDB-like filter objects.
+ * Helper to build dynamic SQL WHERE clauses from filter objects.
  */
 export const buildWhere = (filter = {}) => {
   const conditions = [];
