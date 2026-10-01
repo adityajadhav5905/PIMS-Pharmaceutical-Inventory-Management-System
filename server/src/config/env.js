@@ -20,11 +20,11 @@ if (nodeEnv === "production") {
 
 const env = {
   port: Number(process.env.SERVER_PORT || process.env.PORT || 5000),
-  mysqlHost: process.env.MYSQL_HOST || "127.0.0.1",
-  mysqlPort: Number(process.env.MYSQL_PORT || 3306),
-  mysqlUser: process.env.MYSQL_USER || "root",
-  mysqlPassword: process.env.MYSQL_PASSWORD || "",
-  mysqlDatabase: process.env.MYSQL_DATABASE || (nodeEnv === "test" ? "pims_test" : "pims"),
+  mysqlHost: process.env.MYSQL_HOST || process.env.DB_HOST || "127.0.0.1",
+  mysqlPort: Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306),
+  mysqlUser: process.env.MYSQL_USER || process.env.DB_USER || "root",
+  mysqlPassword: process.env.MYSQL_PASSWORD !== undefined ? process.env.MYSQL_PASSWORD : (process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : ""),
+  mysqlDatabase: process.env.MYSQL_DATABASE || process.env.DB_NAME || (nodeEnv === "test" ? "pims_test" : "pims"),
   accessSecret: process.env.JWT_ACCESS_SECRET || (nodeEnv === "test" ? "test_access_secret_64_bytes_00000000000000000000000000000000" : "dev_access_secret_64_bytes_00000000000000000000000000000000"),
   refreshSecret: process.env.JWT_REFRESH_SECRET || (nodeEnv === "test" ? "test_refresh_secret_64_bytes_00000000000000000000000000000000" : "dev_refresh_secret_64_bytes_00000000000000000000000000000000"),
   accessExpiry: process.env.JWT_ACCESS_EXPIRY || "15m",

@@ -1,5 +1,5 @@
 /**
- * PIMS Complete QA End-to-End Verification Test Suite (MongoDB / Mongoose)
+ * PIMS Complete QA End-to-End Verification Test Suite (MySQL)
  *
  * Covers all 13 core operational areas:
  *   1. New Pharmacy Registration & Admin Creation

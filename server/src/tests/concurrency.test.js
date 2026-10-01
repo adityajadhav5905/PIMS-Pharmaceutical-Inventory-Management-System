@@ -8,7 +8,7 @@ const PORT = 5051;
 const BASE_URL = `http://127.0.0.1:${PORT}/api/v1`;
 
 async function runTests() {
-  logger.info({ message: "Starting concurrency integration tests on MongoDB..." });
+  logger.info({ message: "Starting concurrency integration tests on MySQL..." });
 
   emailService.setProvider(new MockEmailProvider());
   emailService.clearSentEmails();
@@ -211,7 +211,7 @@ async function runTests() {
         throw new Error(`Staff sales verification failed: Expected total sales to be 200, got ${updatedStaff.totalSales}`);
       }
 
-      logger.info({ message: "CONCURRENCY TEST PASSED SUCCESSFULLY! All MongoDB atomic stock operations validated." });
+      logger.info({ message: "CONCURRENCY TEST PASSED SUCCESSFULLY! All MySQL atomic stock operations validated." });
       
     } catch (err) {
       logger.error({ message: `TEST FAILED: ${err.message}` });

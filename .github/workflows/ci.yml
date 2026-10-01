@@ -33,10 +33,29 @@ jobs:
     name: Server Tests & Verification
     runs-on: ubuntu-latest
     services:
-      mongodb:
-        image: mongo:7.0
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: pims_test
         ports:
-          - 27017:27017
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    env:
+      NODE_ENV: test
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: pims_test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: pims_test
+      JWT_ACCESS_SECRET: test_ci_access_secret_64_bytes_00000000000000000000000000000000
+      JWT_REFRESH_SECRET: test_ci_refresh_secret_64_bytes_00000000000000000000000000000000
 
     steps:
       - name: Checkout repository
@@ -53,20 +72,14 @@ jobs:
         run: npm ci
         working-directory: server
 
+      - name: Initialize Database Schema
+        run: node src/config/initDb.js
+        working-directory: server
+
       - name: Seed Test Database
         run: npm run seed
         working-directory: server
-        env:
-          NODE_ENV: test
-          MONGODB_URI: mongodb://127.0.0.1:27017/pims_test
-          JWT_ACCESS_SECRET: test_ci_access_secret_64_bytes_00000000000000000000000000000000
-          JWT_REFRESH_SECRET: test_ci_refresh_secret_64_bytes_00000000000000000000000000000000
 
       - name: Run Test Suite
         run: npm run test:all
         working-directory: server
-        env:
-          NODE_ENV: test
-          MONGODB_URI: mongodb://127.0.0.1:27017/pims_test
-          JWT_ACCESS_SECRET: test_ci_access_secret_64_bytes_00000000000000000000000000000000
-          JWT_REFRESH_SECRET: test_ci_refresh_secret_64_bytes_00000000000000000000000000000000

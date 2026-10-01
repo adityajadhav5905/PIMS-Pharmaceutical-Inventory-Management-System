@@ -27,18 +27,16 @@ async function seed() {
   await connectDb();
 
   logger.info({ message: "Initializing test environment collections..." });
-  await Promise.all([
-    Pharmacy.deleteMany({}),
-    User.deleteMany({}),
-    Staff.deleteMany({}),
-    Medicine.deleteMany({}),
-    Inventory.deleteMany({}),
-    Transaction.deleteMany({}),
-    Alert.deleteMany({}),
-    Prediction.deleteMany({}),
-    UserPreference.deleteMany({}),
-    SupportTicket.deleteMany({})
-  ]);
+  await SupportTicket.deleteMany({});
+  await UserPreference.deleteMany({});
+  await Prediction.deleteMany({});
+  await Alert.deleteMany({});
+  await Transaction.deleteMany({});
+  await Inventory.deleteMany({});
+  await Staff.deleteMany({});
+  await Medicine.deleteMany({});
+  await User.deleteMany({});
+  await Pharmacy.deleteMany({});
 
   const testSeedPassword = process.env.TEST_SEED_PASSWORD || generateSecureTemporaryPassword();
   const passwordHash = await bcrypt.hash(testSeedPassword, 10);
