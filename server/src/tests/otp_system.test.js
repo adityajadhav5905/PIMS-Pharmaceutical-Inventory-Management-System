@@ -92,6 +92,7 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
 
   it("1. Generates 6-digit numeric OTP and stores ONLY hashed OTP in MySQL", async () => {
     const email = "doctor@testclinic.com";
+    const generationTime = Date.now();
     const res = await OtpService.generateAndSendOtp({
       email,
       purpose: "PHARMACY_REGISTRATION",
@@ -116,9 +117,16 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     assert.ok(dbRecord.hashedOtp.startsWith("$2"));
     assert.equal(await bcrypt.compare(sentOtp, dbRecord.hashedOtp), true);
 
-    // Verify 5-minute expiry
-    const diffMs = new Date(dbRecord.expiresAt).getTime() - new Date().getTime();
-    assert.ok(diffMs > 4 * 60 * 1000 && diffMs <= 5 * 60 * 1000);
+    // Verify 5-minute expiry relative to generation timestamp
+    const expiryTime = new Date(dbRecord.expiresAt).getTime();
+    const diffMs = expiryTime - generationTime;
+    const expectedMs = 5 * 60 * 1000;
+    const toleranceMs = 30 * 1000;
+
+    assert.ok(
+      Math.abs(diffMs - expectedMs) <= toleranceMs,
+      `OTP expiry was ${diffMs}ms after generation; expected approximately ${expectedMs}ms`
+    );
   });
 
   it("2. Invalidates previous OTPs when a new OTP is requested for the same user/purpose", async () => {
