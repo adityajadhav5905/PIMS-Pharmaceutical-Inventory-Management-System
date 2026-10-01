@@ -163,8 +163,9 @@ export const deleteMedicine = asyncHandler(async (req, res) => {
 
 /** Helper to resolve or upsert medicine during batch creation. */
 const resolveMedicineId = async (payload, pharmacyDbId) => {
-  if (payload.medicine) {
-    const med = await Medicine.findByIdAndPharmacy(payload.medicine, pharmacyDbId);
+  const candidateId = payload.medicine || payload.medicineId;
+  if (candidateId) {
+    const med = await Medicine.findByIdAndPharmacy(candidateId, pharmacyDbId);
     if (med) {
       if (payload.category !== undefined) {
         await Medicine.updateById(med.id, { category: payload.category });

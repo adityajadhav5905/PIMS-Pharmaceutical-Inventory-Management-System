@@ -16,6 +16,7 @@ export const medicineSchema = Joi.object({
 
 export const inventorySchema = Joi.object({
   medicine: idSchema.optional(),
+  medicineId: idSchema.optional(),
   name: Joi.string().optional(),
   brand: Joi.string().allow("").optional(),
   description: Joi.string().allow("").optional(),
@@ -26,10 +27,11 @@ export const inventorySchema = Joi.object({
   currentStock: Joi.number().integer().min(0).required(),
   reorderLevel: Joi.number().integer().min(0).default(20),
   expiryDate: Joi.date().required()
-}).or("medicine", "name");
+}).or("medicine", "medicineId", "name");
 
 export const inventoryUpdateSchema = Joi.object({
   medicine: idSchema.optional(),
+  medicineId: idSchema.optional(),
   name: Joi.string().optional(),
   brand: Joi.string().allow("").optional(),
   description: Joi.string().allow("").optional(),

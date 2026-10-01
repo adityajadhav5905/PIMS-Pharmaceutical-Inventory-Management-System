@@ -88,8 +88,9 @@ export default function Inventory() {
    * its total current stock across all active batches.
    */
   const handleSelectMedicine = (medicine) => {
+    const medId = medicine.id || medicine._id;
     const totalStock = availableStock
-      .filter((item) => item.medicine?._id === medicine._id)
+      .filter((item) => (item.medicine?._id || item.medicine?.id || item.medicineId) === medId)
       .reduce((sum, item) => sum + (item.currentStock || 0), 0);
 
     setFormData({

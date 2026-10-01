@@ -13,7 +13,8 @@
     "test:otp": "node src/tests/otp_system.test.js",
     "test:concurrency": "node src/tests/concurrency.test.js",
     "test:forecast": "node src/tests/forecasting_integration.test.js",
-    "test:all": "node src/tests/integration.test.js && node src/tests/otp_system.test.js && node src/tests/concurrency.test.js && node src/tests/forecasting_integration.test.js"
+    "test:comprehensive": "node src/tests/comprehensive_pass.test.js",
+    "test:all": "node src/tests/integration.test.js && node src/tests/otp_system.test.js && node src/tests/concurrency.test.js && node src/tests/forecasting_integration.test.js && node src/tests/comprehensive_pass.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

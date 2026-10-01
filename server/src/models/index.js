@@ -283,7 +283,6 @@ export const Staff = {
   },
   async findOne(filter) {
     if (!filter || Object.keys(filter).length === 0) return null;
-    if (filter._id || filter.id) return this.findById(filter._id || filter.id);
     const { where, params } = buildWhere(filter);
     const rows = await query(`SELECT * FROM staff ${where} LIMIT 1`, params);
     return toCamel(rows[0]);

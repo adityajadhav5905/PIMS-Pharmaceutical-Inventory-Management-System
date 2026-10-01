@@ -53,7 +53,7 @@ export default function Sell() {
     loadEmployees();
   }, []);
 
-  const selected = stock.find((s) => s._id === form.inventoryId);
+  const selected = stock.find((s) => String(s._id || s.id) === String(form.inventoryId));
   const qty = Number(form.quantity) || 0;
   const estimatedProfit = selected
     ? qty * ((selected.medicine?.sellingPrice || 0) - (selected.medicine?.buyingPrice || 0))
@@ -168,9 +168,9 @@ export default function Sell() {
                       })
                       .map((item) => (
                         <li
-                          key={item._id}
+                          key={item._id || item.id}
                           onMouseDown={() => {
-                            setForm({ ...form, inventoryId: item._id });
+                            setForm({ ...form, inventoryId: item._id || item.id });
                             setSearchTerm(
                               `${item.medicine?.name} (${item.medicine?.brand || 'No brand'}) — Batch ${item.batchNumber}`
                             );
@@ -216,7 +216,7 @@ export default function Sell() {
                 >
                   <option value="">Select dispensing employee...</option>
                   {employees.map((emp) => (
-                    <option key={emp._id} value={emp._id}>
+                    <option key={emp._id || emp.id} value={emp._id || emp.id}>
                       {emp.name} ({emp.position} · {emp.department})
                     </option>
                   ))}
