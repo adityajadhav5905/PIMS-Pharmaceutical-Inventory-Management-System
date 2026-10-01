@@ -53,15 +53,13 @@ const cleanup = async () => {
   const pharm = await Pharmacy.findOne({ slug: TEST_SLUG });
   if (pharm) {
     const pId = pharm._id;
-    await Promise.all([
-      Alert.deleteMany({ pharmacyId: pId }),
-      Prediction.deleteMany({ pharmacyId: pId }),
-      Transaction.deleteMany({ pharmacyId: pId }),
-      Inventory.deleteMany({ pharmacyId: pId }),
-      Medicine.deleteMany({ pharmacyId: pId }),
-      User.deleteMany({ pharmacyId: pId }),
-      Pharmacy.deleteOne({ _id: pId })
-    ]);
+    await Alert.deleteMany({ pharmacyId: pId });
+    await Prediction.deleteMany({ pharmacyId: pId });
+    await Transaction.deleteMany({ pharmacyId: pId });
+    await Inventory.deleteMany({ pharmacyId: pId });
+    await Medicine.deleteMany({ pharmacyId: pId });
+    await User.deleteMany({ pharmacyId: pId });
+    await Pharmacy.deleteOne({ _id: pId });
   }
   await User.deleteMany({ email: "forecast_admin@qapims.com" });
   await Otp.deleteMany({});

@@ -5,7 +5,7 @@ import { emailService } from "./emailService.js";
 
 /**
  * Reusable Purpose-Based OTP Service.
- * Generates 6-digit OTPs, securely stores only bcrypt hashes in MongoDB,
+ * Generates 6-digit OTPs, securely stores only bcrypt hashes in MySQL,
  * handles 5-minute expiries, max 5 attempts rate-limiting, and target entity binding.
  */
 export class OtpService {
@@ -43,11 +43,7 @@ export class OtpService {
     }
 
     // 1. Invalidate previous pending OTPs for the same email and purpose (and targetEntityId if specified)
-    const filter = { email: cleanEmail, purpose };
-    if (targetEntityId) {
-      filter.targetEntityId = String(targetEntityId);
-    }
-    await Otp.deleteMany(filter);
+    await Otp.deleteByEmailAndPurpose(cleanEmail, purpose, targetEntityId || null);
 
     // 2. Generate 6-digit numeric OTP and hash it with bcrypt
     const rawOtp = this.generateNumericOtp();
@@ -57,7 +53,7 @@ export class OtpService {
     const expiryMinutes = 5;
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
-    // 4. Persist in MongoDB
+    // 4. Persist in MySQL
     await Otp.create({
       email: cleanEmail,
       hashedOtp,
@@ -118,16 +114,7 @@ export class OtpService {
     }
 
     // Query for active OTP record
-    const query = {
-      email: cleanEmail,
-      purpose
-    };
-
-    if (targetEntityId) {
-      query.targetEntityId = String(targetEntityId);
-    }
-
-    const record = await Otp.findOne(query).sort({ createdAt: -1 });
+    const record = await Otp.findLatest(cleanEmail, purpose, targetEntityId || null);
 
     if (!record) {
       const err = new Error("No active verification code found. Please request a new OTP.");
@@ -137,7 +124,7 @@ export class OtpService {
 
     // Check expiration
     if (new Date() > new Date(record.expiresAt)) {
-      await Otp.deleteOne({ _id: record._id });
+      await Otp.deleteById(record.id);
       const err = new Error("Verification code has expired. Please request a new one.");
       err.statusCode = 400;
       throw err;
@@ -145,7 +132,7 @@ export class OtpService {
 
     // Check attempt limits
     if (record.attempts >= record.maxAttempts) {
-      await Otp.deleteOne({ _id: record._id });
+      await Otp.deleteById(record.id);
       const err = new Error("Too many failed attempts. This verification code is no longer valid. Please request a new one.");
       err.statusCode = 400;
       throw err;
@@ -155,15 +142,15 @@ export class OtpService {
     const isMatch = await bcrypt.compare(cleanOtp, record.hashedOtp);
 
     if (!isMatch) {
-      record.attempts += 1;
-      await record.save();
-      const remainingAttempts = Math.max(0, record.maxAttempts - record.attempts);
+      const newAttempts = record.attempts + 1;
+      await Otp.updateById(record.id, { attempts: newAttempts });
+      const remainingAttempts = Math.max(0, record.maxAttempts - newAttempts);
       const err = new Error(`Incorrect verification code. ${remainingAttempts} attempt(s) remaining.`);
       err.statusCode = 400;
       throw err;
     }
 
-    // Bind validation: verify pharmacyId / userId match if bound
+    // Bind validation: verify pharmacyId match if bound
     if (pharmacyId && record.pharmacyId && String(pharmacyId) !== String(record.pharmacyId)) {
       const err = new Error("OTP verification workspace mismatch");
       err.statusCode = 403;
@@ -172,10 +159,9 @@ export class OtpService {
 
     // Successfully verified -> consume OTP so it cannot be reused
     if (consume) {
-      await Otp.deleteOne({ _id: record._id });
+      await Otp.deleteById(record.id);
     } else {
-      record.verified = true;
-      await record.save();
+      await Otp.updateById(record.id, { verified: 1 });
     }
 
     return {

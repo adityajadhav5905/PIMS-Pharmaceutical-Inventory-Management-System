@@ -1,7 +1,7 @@
 import { describe, it, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { connectDb, disconnectDb } from "../config/db.js";
 import { Otp, User, Pharmacy, Staff } from "../models/index.js";
 import { OtpService } from "../services/otpService.js";
 import { emailService, MockEmailProvider } from "../services/emailService.js";
@@ -35,18 +35,23 @@ const request = async (path, options = {}) => {
 describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", () => {
   before(async () => {
     emailService.setProvider(new MockEmailProvider());
-    if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/pims");
-    }
+    await connectDb();
 
     // Set up test pharmacy and admin user
-    await Pharmacy.deleteOne({ slug: TEST_PHARMACY_SLUG });
+    const existingP = await Pharmacy.findOne({ slug: TEST_PHARMACY_SLUG });
+    if (existingP) {
+      await Staff.deleteByPharmacy(existingP._id);
+      await User.deleteByPharmacy(existingP._id);
+      await Pharmacy.deleteById(existingP._id);
+    }
+    await User.deleteByEmails([TEST_ADMIN_EMAIL]);
+    await Staff.deleteByEmails([TEST_ADMIN_EMAIL]);
+
     suitePharmacy = await Pharmacy.create({
       slug: TEST_PHARMACY_SLUG,
       name: "OTP Test Pharmacy"
     });
 
-    await User.deleteMany({ email: TEST_ADMIN_EMAIL });
     const hashedPassword = await bcrypt.hash(TEST_ADMIN_PASSWORD, 10);
     suiteAdminUser = await User.create({
       pharmacyId: suitePharmacy._id,
@@ -72,12 +77,12 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
   after(async () => {
     if (server) await new Promise((resolve) => server.close(resolve));
     if (suitePharmacy) {
-      await User.deleteMany({ pharmacyId: suitePharmacy._id });
-      await Staff.deleteMany({ pharmacyId: suitePharmacy._id });
-      await Pharmacy.deleteOne({ _id: suitePharmacy._id });
+      await Staff.deleteByPharmacy(suitePharmacy._id);
+      await User.deleteByPharmacy(suitePharmacy._id);
+      await Pharmacy.deleteById(suitePharmacy._id);
     }
-    await Otp.deleteMany({});
-    await mongoose.connection.close();
+    await Otp.deleteAll();
+    await disconnectDb();
   });
 
   beforeEach(() => {
@@ -85,7 +90,7 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     emailService.clearSentEmails();
   });
 
-  it("1. Generates 6-digit numeric OTP and stores ONLY hashed OTP in MongoDB", async () => {
+  it("1. Generates 6-digit numeric OTP and stores ONLY hashed OTP in MySQL", async () => {
     const email = "doctor@testclinic.com";
     const res = await OtpService.generateAndSendOtp({
       email,
@@ -104,7 +109,7 @@ describe("══ PIMS OTP & CREDENTIAL GENERATION VERIFICATION SUITE ══", ()
     assert.match(sentOtp, /^\d{6}$/);
 
     // Verify DB record stores hashedOtp and NOT plaintext
-    const dbRecord = await Otp.findOne({ email, purpose: "PHARMACY_REGISTRATION" });
+    const dbRecord = await Otp.findLatest(email, "PHARMACY_REGISTRATION");
     assert.ok(dbRecord);
     assert.ok(dbRecord.hashedOtp);
     assert.notEqual(dbRecord.hashedOtp, sentOtp);

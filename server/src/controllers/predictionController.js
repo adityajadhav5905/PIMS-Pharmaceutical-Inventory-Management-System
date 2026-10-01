@@ -43,17 +43,13 @@ export const calculatePharmacyBaseline = async (pharmacyDbId, medicineId, initia
   const currentMonth = now.getMonth(); // 0-indexed
 
   // Query all completed OUT transactions for this medicine
-  const transactions = await Transaction.find({
-    pharmacyId: pharmacyDbId,
-    medicineId,
-    type: "OUT"
-  }).sort({ createdAt: 1 });
+  const transactions = await Transaction.findByMedicineAndPharmacy(medicineId, pharmacyDbId, "OUT");
 
   // Aggregate sales by calendar month (YYYY-MM)
   const monthlyTotals = new Map();
 
   for (const tx of transactions) {
-    const txDate = new Date(tx.createdAt);
+    const txDate = new Date(tx.createdAt || tx.created_at);
     const txYear = txDate.getFullYear();
     const txMonth = txDate.getMonth();
 
@@ -128,7 +124,7 @@ export const runPrediction = asyncHandler(async (req, res) => {
   const nextMonth = targetMonthReq || ((new Date().getMonth() + 1) % 12 + 1);
 
   // 4. Calculate current stock from active batches
-  const batches = await Inventory.find({ medicineId: medicine._id, pharmacyId: pharmacyDbId });
+  const batches = await Inventory.findByMedicineAndPharmacy(medicine._id, pharmacyDbId);
   const currentStock = batches.reduce((sum, b) => sum + (b.currentStock || 0), 0);
 
   // 5. Calculate seasonal demand forecast
@@ -145,26 +141,21 @@ export const runPrediction = asyncHandler(async (req, res) => {
   const confidence = Number(forecastResponse.confidence) || 0.80;
   const recommendedStock = Math.ceil(totalDemand * 1.2);
 
-  // 6. Save / Update prediction history in MongoDB
-  await Prediction.findOneAndUpdate(
-    { pharmacyId: pharmacyDbId, medicineId: medicine._id },
-    {
-      predictedDemand: forecastResponse.predicted_demand,
-      confidence,
-      source: forecastResponse.source,
-      predictionDate: new Date()
-    },
-    { upsert: true, returnDocument: "after" }
-  );
+  // 6. Save / Update prediction history in MySQL
+  await Prediction.upsert(pharmacyDbId, medicine._id, {
+    predictedDemand: forecastResponse.predicted_demand,
+    confidence,
+    source: forecastResponse.source,
+    predictionDate: new Date()
+  });
 
   // 7. Inventory & Alert Flow: Trigger replenishment alert if current stock < predicted demand
   if (currentStock < totalDemand) {
-    const existingAlert = await Alert.findOne({
-      pharmacyId: pharmacyDbId,
-      type: "LOW_STOCK",
-      isResolved: false,
-      message: new RegExp(`\\[Prediction\\] Replenishment needed for "${medicine.name}"`, "i")
-    });
+    const existingAlert = await Alert.findUnresolvedByMessage(
+      pharmacyDbId,
+      "LOW_STOCK",
+      `Replenishment needed for "${medicine.name}"`
+    );
 
     if (!existingAlert) {
       const shortage = totalDemand - currentStock;
@@ -213,32 +204,11 @@ export const getPredictionHistory = asyncHandler(async (req, res) => {
   const limit = Number(req.query.limit || 20);
   const medicineId = req.query.medicineId;
 
-  const queryObj = { pharmacyId: pharmacyDbId };
-  if (medicineId) {
-    queryObj.medicineId = medicineId;
-  }
-
-  const total = await Prediction.countDocuments(queryObj);
-  const predictions = await Prediction.find(queryObj)
-    .populate("medicineId")
-    .sort({ updatedAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit);
+  const { total, rows } = await Prediction.findByPharmacyPaginated(pharmacyDbId, { page, limit, medicineId });
 
   return res.json({
     success: true,
-    data: predictions.map((p) => ({
-      _id: p._id,
-      id: p._id,
-      medicineId: p.medicineId?._id,
-      medicineName: p.medicineId?.name || "Unknown",
-      medicineSku: p.medicineId?.sku || "",
-      predictionDate: p.predictionDate,
-      predictedDemand: p.predictedDemand,
-      confidence: p.confidence,
-      source: p.source,
-      createdAt: p.createdAt
-    })),
+    data: rows,
     meta: { page, limit, total, totalPages: Math.ceil(total / limit) }
   });
 });

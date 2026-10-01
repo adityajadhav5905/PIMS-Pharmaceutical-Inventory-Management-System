@@ -7,7 +7,7 @@ import { UserPreference } from "../models/index.js";
  */
 export const getPreferences = asyncHandler(async (req, res) => {
   const userId = req.user.sub;
-  const prefs = await UserPreference.findOne({ userId });
+  const prefs = await UserPreference.findByUserId(userId);
 
   if (!prefs) {
     return res.json({
@@ -38,22 +38,20 @@ export const updatePreferences = asyncHandler(async (req, res) => {
   const userId = req.user.sub;
   const { emailNotifications, inventoryAlerts, weeklyReports } = req.body;
 
-  const prefs = await UserPreference.findOneAndUpdate(
-    { userId },
-    {
-      emailNotifications: emailNotifications !== undefined ? Boolean(emailNotifications) : true,
-      inventoryAlerts: inventoryAlerts !== undefined ? Boolean(inventoryAlerts) : true,
-      weeklyReports: weeklyReports !== undefined ? Boolean(weeklyReports) : false
-    },
-    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
-  );
+  const current = await UserPreference.findByUserId(userId);
+
+  const updated = await UserPreference.upsert(userId, {
+    emailNotifications: emailNotifications !== undefined ? Boolean(emailNotifications) : (current ? current.emailNotifications : true),
+    inventoryAlerts: inventoryAlerts !== undefined ? Boolean(inventoryAlerts) : (current ? current.inventoryAlerts : true),
+    weeklyReports: weeklyReports !== undefined ? Boolean(weeklyReports) : (current ? current.weeklyReports : false)
+  });
 
   return res.json({
     success: true,
     data: {
-      emailNotifications: Boolean(prefs.emailNotifications),
-      inventoryAlerts: Boolean(prefs.inventoryAlerts),
-      weeklyReports: Boolean(prefs.weeklyReports)
+      emailNotifications: Boolean(updated.emailNotifications),
+      inventoryAlerts: Boolean(updated.inventoryAlerts),
+      weeklyReports: Boolean(updated.weeklyReports)
     }
   });
 });

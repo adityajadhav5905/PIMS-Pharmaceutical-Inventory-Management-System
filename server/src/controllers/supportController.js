@@ -51,47 +51,8 @@ export const listTickets = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
   const { status, search } = req.query;
 
-  const queryObj = { pharmacyId: pharmacyDbId };
-  if (status && ["open", "closed"].includes(status)) {
-    queryObj.status = status;
-  }
-
-  if (search && search.trim()) {
-    const term = search.trim();
-    const matchedUsers = await User.find({
-      pharmacyId: pharmacyDbId,
-      $or: [
-        { name: { $regex: term, $options: "i" } },
-        { email: { $regex: term, $options: "i" } }
-      ]
-    }).select("_id");
-    const userIds = matchedUsers.map((u) => u._id);
-
-    queryObj.$or = [
-      { subject: { $regex: term, $options: "i" } },
-      { message: { $regex: term, $options: "i" } },
-      { userId: { $in: userIds } }
-    ];
-  }
-
-  const tickets = await SupportTicket.find(queryObj)
-    .populate("userId", "name email")
-    .sort({ createdAt: -1 })
-    .limit(200);
-
-  const formatted = tickets.map((t) => ({
-    _id: t._id,
-    id: t._id,
-    subject: t.subject,
-    message: t.message,
-    status: t.status,
-    createdAt: t.createdAt,
-    closedAt: t.closedAt,
-    user_name: t.userId?.name || "",
-    user_email: t.userId?.email || ""
-  }));
-
-  return res.json({ success: true, data: formatted });
+  const tickets = await SupportTicket.findByPharmacy(pharmacyDbId, { status, search });
+  return res.json({ success: true, data: tickets });
 });
 
 /**
@@ -111,7 +72,7 @@ export const updateTicketStatus = asyncHandler(async (req, res) => {
   }
 
   const pharmacyDbId = getPharmacyDbId();
-  const ticket = await SupportTicket.findOne({ _id: id, pharmacyId: pharmacyDbId }).populate("userId", "name email");
+  const ticket = await SupportTicket.findByIdAndPharmacy(id, pharmacyDbId);
 
   if (!ticket) {
     return res.status(404).json({
@@ -120,10 +81,14 @@ export const updateTicketStatus = asyncHandler(async (req, res) => {
     });
   }
 
-  ticket.status = status;
-  ticket.closedAt = status === "closed" ? new Date() : null;
-  ticket.closedBy = status === "closed" ? req.user?.sub : null;
-  await ticket.save();
+  const closedAt = status === "closed" ? new Date() : null;
+  const closedBy = status === "closed" ? req.user?.sub : null;
+
+  await SupportTicket.updateById(id, {
+    status,
+    closedAt,
+    closedBy
+  });
 
   return res.json({
     success: true,
@@ -133,10 +98,10 @@ export const updateTicketStatus = asyncHandler(async (req, res) => {
       id: ticket._id,
       subject: ticket.subject,
       message: ticket.message,
-      status: ticket.status,
-      user_name: ticket.userId?.name || "",
-      user_email: ticket.userId?.email || "",
-      closedAt: ticket.closedAt,
+      status,
+      user_name: ticket.user_name || "",
+      user_email: ticket.user_email || "",
+      closedAt,
       createdAt: ticket.createdAt
     }
   });

@@ -10,16 +10,16 @@ const startOfMonth = () => {
 const formatBatch = (b) => {
   if (!b) return null;
   return {
-    _id: b._id,
-    id: b._id,
-    medicineName: b.medicineId?.name || "Unknown",
-    brand: b.medicineId?.brand || "",
+    _id: b._id || b.id,
+    id: b._id || b.id,
+    medicineName: b.medicine?.name || b.medicineName || "Unknown",
+    brand: b.medicine?.brand || b.brand || "",
     batchNumber: b.batchNumber,
     currentStock: b.currentStock,
     reorderLevel: b.reorderLevel,
     expiryDate: b.expiryDate,
-    buyingPrice: b.medicineId?.buyingPrice || 0,
-    sellingPrice: b.medicineId?.sellingPrice || 0
+    buyingPrice: b.medicine?.buyingPrice || b.buyingPrice || 0,
+    sellingPrice: b.medicine?.sellingPrice || b.sellingPrice || 0
   };
 };
 
@@ -27,73 +27,25 @@ const formatBatch = (b) => {
 export const getDashboardStats = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
   const monthStart = startOfMonth();
-  const now = new Date();
-  const inTenDays = new Date();
-  inTenDays.setDate(inTenDays.getDate() + 10);
 
-  const [expiredCount, expiringSoonCount, lowStockCount, profitAgg] = await Promise.all([
-    Inventory.countDocuments({
-      pharmacyId: pharmacyDbId,
-      expiryDate: { $lt: now }
-    }),
-    Inventory.countDocuments({
-      pharmacyId: pharmacyDbId,
-      expiryDate: { $gte: now, $lte: inTenDays }
-    }),
-    Inventory.countDocuments({
-      pharmacyId: pharmacyDbId,
-      currentStock: { $gt: 0 },
-      $expr: { $lte: ["$currentStock", "$reorderLevel"] }
-    }),
-    Transaction.aggregate([
-      {
-        $match: {
-          pharmacyId: pharmacyDbId,
-          type: "OUT",
-          createdAt: { $gte: monthStart }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          profit: { $sum: "$profit" }
-        }
-      }
-    ])
+  const [expiredCount, expiringSoonCount, lowStockCount, profitThisMonth] = await Promise.all([
+    Inventory.countExpired(pharmacyDbId),
+    Inventory.countExpiringSoon(pharmacyDbId, 10),
+    Inventory.countLowStock(pharmacyDbId),
+    Transaction.aggregateMonthProfit(pharmacyDbId, monthStart)
   ]);
-
-  const profitThisMonth = profitAgg.length > 0 ? profitAgg[0].profit : 0;
 
   let expiryPanelRows = [];
   let expiryPanelTitle = "Expiring Soon (10 days)";
 
   if (expiredCount > 0) {
     expiryPanelTitle = "Expired Stock";
-    expiryPanelRows = await Inventory.find({
-      pharmacyId: pharmacyDbId,
-      expiryDate: { $lt: now }
-    })
-      .populate("medicineId")
-      .sort({ expiryDate: 1 })
-      .limit(10);
+    expiryPanelRows = await Inventory.findExpiredWithMedicine(pharmacyDbId, 10);
   } else {
-    expiryPanelRows = await Inventory.find({
-      pharmacyId: pharmacyDbId,
-      expiryDate: { $gte: now, $lte: inTenDays }
-    })
-      .populate("medicineId")
-      .sort({ expiryDate: 1 })
-      .limit(10);
+    expiryPanelRows = await Inventory.findExpiringSoonWithMedicine(pharmacyDbId, 10, 10);
   }
 
-  const lowStockItemsRows = await Inventory.find({
-    pharmacyId: pharmacyDbId,
-    currentStock: { $gt: 0 },
-    $expr: { $lte: ["$currentStock", "$reorderLevel"] }
-  })
-    .populate("medicineId")
-    .sort({ currentStock: 1 })
-    .limit(10);
+  const lowStockItemsRows = await Inventory.findLowStockWithMedicine(pharmacyDbId, 10);
 
   return res.json({
     success: true,

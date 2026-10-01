@@ -19,7 +19,7 @@ export const sendRegistrationOtp = asyncHandler(async (req, res) => {
   const cleanEmail = email.toLowerCase().trim();
 
   // 1. Verify pharmacy workspace identifier is available
-  const existingPharmacy = await Pharmacy.findOne({ slug: cleanSlug });
+  const existingPharmacy = await Pharmacy.findBySlug(cleanSlug);
   if (existingPharmacy) {
     return res.status(409).json({
       success: false,
@@ -28,7 +28,7 @@ export const sendRegistrationOtp = asyncHandler(async (req, res) => {
   }
 
   // 2. Verify email is available
-  const existingUser = await User.findOne({ email: cleanEmail });
+  const existingUser = await User.findByEmail(cleanEmail);
   if (existingUser) {
     return res.status(409).json({
       success: false,
@@ -64,7 +64,7 @@ export const register = asyncHandler(async (req, res) => {
   const cleanEmail = email.toLowerCase().trim();
 
   // 1. Verify that the pharmacy workspace identifier is not already taken
-  const existingPharmacy = await Pharmacy.findOne({ slug: cleanSlug });
+  const existingPharmacy = await Pharmacy.findBySlug(cleanSlug);
   if (existingPharmacy) {
     return res.status(409).json({
       success: false,
@@ -73,7 +73,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // 2. Check if email is already registered in the system
-  const existingUser = await User.findOne({ email: cleanEmail });
+  const existingUser = await User.findByEmail(cleanEmail);
   if (existingUser) {
     return res.status(409).json({ success: false, message: "Email already registered in system" });
   }
@@ -105,7 +105,7 @@ export const register = asyncHandler(async (req, res) => {
 
   // 6. Save new user record
   const newUser = await User.create({
-    pharmacyId: newPharmacy._id,
+    pharmacyId: newPharmacy.id,
     name,
     email: cleanEmail,
     password: hashedPassword,
@@ -114,7 +114,7 @@ export const register = asyncHandler(async (req, res) => {
 
   // 7. Create initial staff entry for workspace admin
   await Staff.create({
-    pharmacyId: newPharmacy._id,
+    pharmacyId: newPharmacy.id,
     name,
     email: cleanEmail,
     position: "System Admin",
@@ -125,7 +125,7 @@ export const register = asyncHandler(async (req, res) => {
   return res.status(201).json({
     success: true,
     message: "Registration successful",
-    data: { id: newUser._id, _id: newUser._id, email: newUser.email, role: assignedRole, pharmacyId: cleanSlug }
+    data: { id: newUser.id, _id: newUser.id, email: newUser.email, role: assignedRole, pharmacyId: cleanSlug }
   });
 });
 
@@ -136,7 +136,7 @@ export const login = asyncHandler(async (req, res) => {
   const { email, password, pharmacyId } = req.body;
 
   const cleanEmail = String(email || "").toLowerCase().trim();
-  const users = await User.find({ email: cleanEmail, isActive: true }).populate("pharmacyId");
+  const users = await User.findActiveByEmail(cleanEmail);
 
   if (users.length === 0) {
     return res.status(401).json({ success: false, message: "Invalid credentials" });
@@ -145,7 +145,7 @@ export const login = asyncHandler(async (req, res) => {
   let user = null;
   if (users.length > 1) {
     const targetSlug = pharmacyId || req.headers["x-pharmacy-id"];
-    user = users.find((u) => u.pharmacyId?.slug === targetSlug);
+    user = users.find((u) => u.pharmacySlug === targetSlug);
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -160,11 +160,11 @@ export const login = asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
 
-  const pharmacySlug = user.pharmacyId?.slug || "";
-  const pharmacyName = user.pharmacyId?.name || "";
+  const pharmacySlug = user.pharmacySlug || "";
+  const pharmacyName = user.pharmacyName || "";
 
   const payload = {
-    sub: user._id.toString(),
+    sub: String(user.id),
     role: user.role,
     email: user.email,
     pharmacyId: pharmacySlug
@@ -187,8 +187,8 @@ export const login = asyncHandler(async (req, res) => {
     success: true,
     data: {
       user: {
-        id: user._id,
-        _id: user._id,
+        id: user.id,
+        _id: user.id,
         role: user.role,
         email: user.email,
         name: user.name,
@@ -254,7 +254,7 @@ export const sendSettingsOtp = asyncHandler(async (req, res) => {
 
   const result = await OtpService.generateAndSendOtp({
     email: user.email,
-    userId: user._id,
+    userId: user.id,
     pharmacyId: user.pharmacyId,
     purpose,
     details: `Authorization to update account: ${purpose}`
@@ -272,7 +272,7 @@ export const sendSettingsOtp = asyncHandler(async (req, res) => {
  * Get profile details of currently logged-in user.
  */
 export const getProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user.sub).populate("pharmacyId");
+  const user = await User.findByIdWithPharmacy(req.user.sub);
 
   if (!user) {
     return res.status(404).json({ success: false, message: "User not found" });
@@ -281,14 +281,14 @@ export const getProfile = asyncHandler(async (req, res) => {
   return res.json({
     success: true,
     data: {
-      id: user._id,
-      _id: user._id,
+      id: user.id,
+      _id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
       isActive: user.isActive,
       createdAt: user.createdAt,
-      pharmacyId: user.pharmacyId?.slug || ""
+      pharmacyId: user.pharmacySlug || ""
     }
   });
 });
@@ -304,6 +304,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
   if (!user) {
     return res.status(404).json({ success: false, message: "User not found" });
   }
+
+  const updates = {};
 
   // 1. If changing name: verify OTP (mandatory)
   const isNameChanging = name && name.trim() !== user.name;
@@ -328,6 +330,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
         throw err;
       }
     });
+    updates.name = name;
   }
 
   // 2. If changing password: verify current password + verify OTP (mandatory)
@@ -361,34 +364,41 @@ export const updateProfile = asyncHandler(async (req, res) => {
       }
     });
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    updates.password = await bcrypt.hash(newPassword, 10);
   }
 
-  if (name) user.name = name;
   if (email && email.toLowerCase() !== user.email) {
-    const existing = await User.findOne({ email: email.toLowerCase().trim(), _id: { $ne: user._id } });
+    const existing = await User.findByEmailExcluding(email, user.id);
     if (existing) {
       return res.status(409).json({ success: false, message: "Email is already in use by another account" });
     }
-    user.email = email.toLowerCase().trim();
+    updates.email = email.toLowerCase().trim();
   }
 
-  await user.save();
+  if (name && !updates.name) {
+    updates.name = name;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await User.updateById(user.id, updates);
+  }
 
   // Also sync staff name & email if matching
-  await Staff.updateMany(
-    { pharmacyId: user.pharmacyId, email: user.email },
-    { $set: { name: user.name, email: user.email } }
-  );
+  const updatedName = updates.name || user.name;
+  const updatedEmail = updates.email || user.email;
+  const staffRecord = await Staff.findByEmailAndPharmacy(user.email, user.pharmacyId);
+  if (staffRecord) {
+    await Staff.updateById(staffRecord.id, { name: updatedName, email: updatedEmail });
+  }
 
   return res.json({
     success: true,
     message: "Profile updated successfully",
     data: {
-      id: user._id,
-      _id: user._id,
-      name: user.name,
-      email: user.email,
+      id: user.id,
+      _id: user.id,
+      name: updatedName,
+      email: updatedEmail,
       role: user.role
     }
   });

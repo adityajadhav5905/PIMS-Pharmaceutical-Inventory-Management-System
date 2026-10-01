@@ -83,17 +83,15 @@ const cleanTenant = async (slug) => {
   const pharmacy = await Pharmacy.findOne({ slug });
   if (pharmacy) {
     const pId = pharmacy._id;
-    await Promise.all([
-      SupportTicket.deleteMany({ pharmacyId: pId }),
-      Prediction.deleteMany({ pharmacyId: pId }),
-      Alert.deleteMany({ pharmacyId: pId }),
-      Transaction.deleteMany({ pharmacyId: pId }),
-      Inventory.deleteMany({ pharmacyId: pId }),
-      Staff.deleteMany({ pharmacyId: pId }),
-      Medicine.deleteMany({ pharmacyId: pId }),
-      User.deleteMany({ pharmacyId: pId }),
-      Pharmacy.deleteOne({ _id: pId })
-    ]);
+    await SupportTicket.deleteMany({ pharmacyId: pId });
+    await Prediction.deleteMany({ pharmacyId: pId });
+    await Alert.deleteMany({ pharmacyId: pId });
+    await Transaction.deleteMany({ pharmacyId: pId });
+    await Inventory.deleteMany({ pharmacyId: pId });
+    await Staff.deleteMany({ pharmacyId: pId });
+    await Medicine.deleteMany({ pharmacyId: pId });
+    await User.deleteMany({ pharmacyId: pId });
+    await Pharmacy.deleteOne({ _id: pId });
   }
   await User.deleteMany({
     email: { $in: ["admin_a@qapims.com", "admin_b@qapims.com", "sarah_pharmacist@qapims.com", "staff_two@qapims.com", "different_email@qapims.com", "temp_pharmacist@qapims.com", "pharmacist_b@qapims.com"] }

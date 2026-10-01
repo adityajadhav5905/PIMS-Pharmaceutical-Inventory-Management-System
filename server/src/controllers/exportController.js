@@ -20,9 +20,7 @@ const toCsv = (headers, rows) => {
 export const exportTransactionsCsv = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
 
-  const transactions = await Transaction.find({ pharmacyId: pharmacyDbId })
-    .populate("medicineId")
-    .sort({ createdAt: -1 });
+  const transactions = await Transaction.findByPharmacy(pharmacyDbId);
 
   const headers = [
     "Date",
@@ -39,15 +37,15 @@ export const exportTransactionsCsv = asyncHandler(async (req, res) => {
   ];
 
   const rows = transactions.map((tx) => [
-    new Date(tx.createdAt).toISOString(),
+    new Date(tx.created_at).toISOString(),
     tx.type,
-    tx.medicineId?.name || "",
-    tx.medicineId?.brand || "",
+    tx.med_name || "",
+    tx.med_brand || "",
     tx.quantity,
-    Number(tx.unitBuyPrice),
-    Number(tx.unitSellPrice),
-    Number(tx.totalCost),
-    Number(tx.totalRevenue),
+    Number(tx.unit_buy_price),
+    Number(tx.unit_sell_price),
+    Number(tx.total_cost),
+    Number(tx.total_revenue),
     Number(tx.profit),
     tx.note || ""
   ]);
@@ -62,9 +60,7 @@ export const exportTransactionsCsv = asyncHandler(async (req, res) => {
 export const exportStockCsv = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
 
-  const batches = await Inventory.find({ pharmacyId: pharmacyDbId })
-    .populate("medicineId")
-    .sort({ createdAt: -1 });
+  const batches = await Inventory.findAllWithMedicine(pharmacyDbId);
 
   const headers = [
     "Medicine",
@@ -80,13 +76,13 @@ export const exportStockCsv = asyncHandler(async (req, res) => {
   ];
 
   const rows = batches.map((b) => {
-    const buy = Number(b.medicineId?.buyingPrice) || 0;
-    const sell = Number(b.medicineId?.sellingPrice) || 0;
+    const buy = Number(b.medicine?.buyingPrice || b.buyingPrice) || 0;
+    const sell = Number(b.medicine?.sellingPrice || b.sellingPrice) || 0;
     const expiryString = b.expiryDate ? new Date(b.expiryDate).toISOString().split("T")[0] : "";
     return [
-      b.medicineId?.name || "",
-      b.medicineId?.brand || "",
-      b.medicineId?.description || "",
+      b.medicine?.name || b.medicineName || "",
+      b.medicine?.brand || b.brand || "",
+      b.medicine?.description || "",
       b.batchNumber,
       b.currentStock,
       b.reorderLevel,
@@ -107,33 +103,17 @@ export const exportStockCsv = asyncHandler(async (req, res) => {
 export const exportStaffPerformanceCsv = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
 
-  const performance = await Transaction.aggregate([
-    {
-      $match: {
-        pharmacyId: pharmacyDbId,
-        type: "OUT",
-        employeeId: { $ne: null }
-      }
-    },
-    {
-      $group: {
-        _id: "$employeeId",
-        salesCount: { $sum: 1 },
-        totalRevenue: { $sum: "$totalRevenue" },
-        totalProfit: { $sum: "$profit" }
-      }
-    }
-  ]);
-
-  const activeStaff = await Staff.find({ pharmacyId: pharmacyDbId, status: "Active" });
+  const performance = await Transaction.aggregateEmployeePerformance(pharmacyDbId);
+  const activeStaff = await Staff.findActiveByPharmacy(pharmacyDbId);
   const perfMap = new Map();
-  performance.forEach((p) => perfMap.set(p._id.toString(), p));
+  performance.forEach((p) => perfMap.set(String(p.employee_id), p));
 
   const rows = activeStaff.map((staff) => {
-    const idStr = staff._id.toString();
-    const salesCount = perfMap.has(idStr) ? perfMap.get(idStr).salesCount : 0;
-    const totalRevenue = perfMap.has(idStr) ? Number(perfMap.get(idStr).totalRevenue) : 0;
-    const totalProfit = perfMap.has(idStr) ? Number(perfMap.get(idStr).totalProfit) : 0;
+    const idStr = String(staff.id || staff._id);
+    const p = perfMap.get(idStr);
+    const salesCount = p ? Number(p.transaction_count) || 0 : 0;
+    const totalRevenue = p ? Number(p.total_sales) || 0 : 0;
+    const totalProfit = p ? Number(p.total_profit) || 0 : 0;
 
     return [
       staff.name,

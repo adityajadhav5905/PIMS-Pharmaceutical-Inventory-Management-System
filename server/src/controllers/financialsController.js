@@ -9,18 +9,7 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
   const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // Aggregate all-time transactions
-  const txAgg = await Transaction.aggregate([
-    { $match: { pharmacyId: pharmacyDbId } },
-    {
-      $group: {
-        _id: "$type",
-        totalRevenue: { $sum: "$totalRevenue" },
-        totalCost: { $sum: "$totalCost" },
-        totalProfit: { $sum: "$profit" },
-        count: { $sum: 1 }
-      }
-    }
-  ]);
+  const txAgg = await Transaction.aggregateByType(pharmacyDbId);
 
   let totalRevenue = 0;
   let totalProfit = 0;
@@ -28,89 +17,31 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
   let salesCount = 0;
 
   txAgg.forEach((group) => {
-    if (group._id === "OUT") {
-      totalRevenue = group.totalRevenue;
-      totalProfit = group.totalProfit;
-      salesCount = group.count;
-    } else if (group._id === "IN") {
-      totalCost = group.totalCost;
+    if (group.type === "OUT") {
+      totalRevenue = Number(group.total_revenue) || 0;
+      totalProfit = Number(group.total_profit) || 0;
+      salesCount = Number(group.cnt) || 0;
+    } else if (group.type === "IN") {
+      totalCost = Number(group.total_cost) || 0;
     }
   });
 
   // Aggregate current month transactions
-  const monthTxAgg = await Transaction.aggregate([
-    {
-      $match: {
-        pharmacyId: pharmacyDbId,
-        type: "OUT",
-        createdAt: { $gte: startOfCurrentMonth }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        monthRevenue: { $sum: "$totalRevenue" },
-        monthProfit: { $sum: "$profit" },
-        monthSalesCount: { $sum: 1 }
-      }
-    }
-  ]);
-
-  const monthRevenue = monthTxAgg.length > 0 ? monthTxAgg[0].monthRevenue : 0;
-  const monthProfit = monthTxAgg.length > 0 ? monthTxAgg[0].monthProfit : 0;
-  const monthSalesCount = monthTxAgg.length > 0 ? monthTxAgg[0].monthSalesCount : 0;
+  const monthTxAgg = await Transaction.aggregateMonthOutSales(pharmacyDbId, startOfCurrentMonth);
+  const monthRevenue = monthTxAgg ? Number(monthTxAgg.month_revenue) || 0 : 0;
+  const monthProfit = monthTxAgg ? Number(monthTxAgg.month_profit) || 0 : 0;
+  const monthSalesCount = monthTxAgg ? Number(monthTxAgg.month_sales_count) || 0 : 0;
 
   // Calculate current stock inventory value
-  const stockAgg = await Inventory.aggregate([
-    { $match: { pharmacyId: pharmacyDbId, currentStock: { $gt: 0 } } },
-    {
-      $lookup: {
-        from: "medicines",
-        localField: "medicineId",
-        foreignField: "_id",
-        as: "medicine"
-      }
-    },
-    { $unwind: "$medicine" },
-    {
-      $group: {
-        _id: null,
-        totalStockValue: {
-          $sum: { $multiply: ["$currentStock", "$medicine.buyingPrice"] }
-        }
-      }
-    }
-  ]);
-
-  const inventoryValue = stockAgg.length > 0 ? stockAgg[0].totalStockValue : 0;
+  const inventoryValue = await Inventory.getStockValue(pharmacyDbId);
 
   // Monthly trend for last 6 months
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-  const monthlyTrends = await Transaction.aggregate([
-    {
-      $match: {
-        pharmacyId: pharmacyDbId,
-        type: "OUT",
-        createdAt: { $gte: sixMonthsAgo }
-      }
-    },
-    {
-      $group: {
-        _id: {
-          year: { $year: "$createdAt" },
-          month: { $month: "$createdAt" }
-        },
-        revenue: { $sum: "$totalRevenue" },
-        profit: { $sum: "$profit" }
-      }
-    },
-    { $sort: { "_id.year": 1, "_id.month": 1 } }
-  ]);
+  const monthlyTrends = await Transaction.aggregateMonthlyTrends(pharmacyDbId, sixMonthsAgo);
 
   // Calculate Highest and Lowest Margin Items from Medicine catalog
-  const medicines = await Medicine.find({ pharmacyId: pharmacyDbId, isActive: true }).select("name buyingPrice sellingPrice");
+  const medicines = await Medicine.findActiveByPharmacy(pharmacyDbId);
   const itemsWithMargin = medicines.map((m) => {
     const buy = Number(m.buyingPrice) || 0;
     const sell = Number(m.sellingPrice) || 0;
@@ -132,20 +63,17 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
     .slice(0, 5);
 
   // Fetch recent sales transactions for UI table
-  const recentSalesTx = await Transaction.find({ pharmacyId: pharmacyDbId, type: "OUT" })
-    .populate("medicineId", "name")
-    .sort({ createdAt: -1 })
-    .limit(10);
+  const recentSalesTx = await Transaction.findOutByPharmacy(pharmacyDbId);
 
   const recentSales = recentSalesTx.map((s) => ({
-    _id: s._id,
-    id: s._id,
-    createdAt: s.createdAt,
-    medicineName: s.medicineId?.name || "Unknown",
+    _id: s.id,
+    id: s.id,
+    createdAt: s.created_at,
+    medicineName: s.med_name || "Unknown",
     quantity: s.quantity,
-    totalRevenue: s.totalRevenue,
-    totalCost: s.totalCost,
-    profit: s.profit
+    totalRevenue: Number(s.total_revenue),
+    totalCost: Number(s.total_cost),
+    profit: Number(s.profit)
   }));
 
   return res.json({
@@ -165,9 +93,9 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
       lowestMarginItems,
       recentSales,
       monthlyTrends: monthlyTrends.map((t) => ({
-        month: `${t._id.year}-${String(t._id.month).padStart(2, "0")}`,
-        revenue: t.revenue,
-        profit: t.profit
+        month: `${t.yr}-${String(t.mo).padStart(2, "0")}`,
+        revenue: Number(t.revenue) || 0,
+        profit: Number(t.profit) || 0
       }))
     }
   });
@@ -177,30 +105,13 @@ export const getFinancialSummary = asyncHandler(async (req, res) => {
 export const getEmployeePerformance = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
 
-  const performance = await Transaction.aggregate([
-    {
-      $match: {
-        pharmacyId: pharmacyDbId,
-        type: "OUT",
-        employeeId: { $ne: null }
-      }
-    },
-    {
-      $group: {
-        _id: "$employeeId",
-        salesCount: { $sum: 1 },
-        totalRevenue: { $sum: "$totalRevenue" },
-        totalProfit: { $sum: "$profit" }
-      }
-    }
-  ]);
-
-  const activeStaff = await Staff.find({ pharmacyId: pharmacyDbId, status: "Active" });
+  const performance = await Transaction.aggregateEmployeePerformance(pharmacyDbId);
+  const activeStaff = await Staff.findActiveByPharmacy(pharmacyDbId);
   const perfMap = new Map();
-  performance.forEach((p) => perfMap.set(p._id.toString(), p));
+  performance.forEach((p) => perfMap.set(String(p.employee_id), p));
 
   const result = activeStaff.map((s) => {
-    const p = perfMap.get(s._id.toString());
+    const p = perfMap.get(String(s.id || s._id));
     return {
       _id: s._id,
       id: s._id,
@@ -208,9 +119,9 @@ export const getEmployeePerformance = asyncHandler(async (req, res) => {
       email: s.email,
       position: s.position,
       department: s.department,
-      salesCount: p ? p.salesCount : 0,
-      totalRevenue: p ? p.totalRevenue : 0,
-      totalProfit: p ? p.totalProfit : 0
+      salesCount: p ? Number(p.transaction_count) || 0 : 0,
+      totalRevenue: p ? Number(p.total_sales) || 0 : 0,
+      totalProfit: p ? Number(p.total_profit) || 0 : 0
     };
   });
 

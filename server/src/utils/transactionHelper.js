@@ -1,27 +1,22 @@
-import mongoose from "mongoose";
+import { getConnection } from "../models/index.js";
 import logger from "./logger.js";
 
 /**
- * Execute operations inside a MongoDB transaction session (when replica set is available).
- * Falls back gracefully to standard execution if transactions are not supported on standalone instances.
+ * Execute operations inside a MySQL transaction with row locking support.
+ * The callback receives a mysql2 connection with an active transaction.
  */
 export const runInTransaction = async (workFn) => {
-  let session = null;
+  const conn = await getConnection();
   try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    const result = await workFn(session);
-    await session.commitTransaction();
+    await conn.beginTransaction();
+    const result = await workFn(conn);
+    await conn.commit();
     return result;
   } catch (error) {
-    if (session && session.inTransaction()) {
-      logger.error({ message: `Transaction failed: ${error.message}. Aborting transaction.` });
-      await session.abortTransaction();
-    }
+    logger.error({ message: `Transaction failed: ${error.message}. Rolling back.` });
+    await conn.rollback();
     throw error;
   } finally {
-    if (session) {
-      await session.endSession();
-    }
+    conn.release();
   }
 };

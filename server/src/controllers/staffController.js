@@ -66,7 +66,7 @@ export const getStaff = asyncHandler(async (req, res) => {
     });
   }
 
-  const staff = await Staff.find({ pharmacyId: pharmacyDbId }).sort({ createdAt: -1 });
+  const staff = await Staff.findByPharmacy(pharmacyDbId);
 
   return res.json({
     success: true,
@@ -176,13 +176,11 @@ export const createStaff = asyncHandler(async (req, res) => {
         role
       });
     } else {
+      const userUpdates = { role, name: name.trim(), isActive: 1 };
       if (password && password.trim().length >= 8) {
-        existingUser.password = passwordHash;
+        userUpdates.password = passwordHash;
       }
-      existingUser.role = role;
-      existingUser.name = name.trim();
-      existingUser.isActive = true;
-      await existingUser.save();
+      await User.updateById(existingUser.id || existingUser._id, userUpdates);
     }
 
     // Dispatch temporary credentials to employee's email via emailService
@@ -268,14 +266,16 @@ export const updateStaff = asyncHandler(async (req, res) => {
 
   const oldEmail = staff.email;
 
-  if (name !== undefined) staff.name = name.trim();
-  if (email !== undefined) staff.email = email.toLowerCase().trim();
-  if (position !== undefined) staff.position = position;
-  if (department !== undefined) staff.department = department;
-  if (salary !== undefined) staff.salary = salary;
-  if (status !== undefined) staff.status = status;
+  const staffUpdates = {};
+  if (name !== undefined) staffUpdates.name = name.trim();
+  if (email !== undefined) staffUpdates.email = email.toLowerCase().trim();
+  if (position !== undefined) staffUpdates.position = position;
+  if (department !== undefined) staffUpdates.department = department;
+  if (salary !== undefined) staffUpdates.salary = salary;
+  if (status !== undefined) staffUpdates.status = status;
 
-  await staff.save();
+  await Staff.updateById(staff.id || staff._id, staffUpdates);
+  const updatedStaff = await Staff.findById(staff.id || staff._id);
 
   // Sync with user login table if email or name changed
   if (oldEmail || email) {
@@ -283,18 +283,19 @@ export const updateStaff = asyncHandler(async (req, res) => {
     if (targetEmail) {
       const user = await User.findOne({ email: targetEmail, pharmacyId: pharmacyDbId });
       if (user) {
-        if (name) user.name = name.trim();
-        if (email) user.email = email.toLowerCase().trim();
+        const userUpdates = {};
+        if (name) userUpdates.name = name.trim();
+        if (email) userUpdates.email = email.toLowerCase().trim();
         if (position) {
-          user.role = position.toLowerCase().includes("admin") ? "Admin" : "Pharmacist";
+          userUpdates.role = position.toLowerCase().includes("admin") ? "Admin" : "Pharmacist";
         }
         if (status) {
-          user.isActive = status === "Active";
+          userUpdates.isActive = status === "Active" ? 1 : 0;
         }
         if (password && password.trim().length >= 8) {
-          user.password = await bcrypt.hash(password.trim(), 10);
+          userUpdates.password = await bcrypt.hash(password.trim(), 10);
         }
-        await user.save();
+        await User.updateById(user.id || user._id, userUpdates);
       }
     }
   }
@@ -302,14 +303,14 @@ export const updateStaff = asyncHandler(async (req, res) => {
   return res.json({
     success: true,
     data: {
-      _id: staff._id,
-      id: staff._id,
-      name: staff.name,
-      email: staff.email,
-      position: staff.position,
-      department: staff.department,
-      salary: staff.salary,
-      status: staff.status
+      _id: updatedStaff._id,
+      id: updatedStaff._id,
+      name: updatedStaff.name,
+      email: updatedStaff.email,
+      position: updatedStaff.position,
+      department: updatedStaff.department,
+      salary: updatedStaff.salary,
+      status: updatedStaff.status
     }
   });
 });
@@ -357,11 +358,11 @@ export const deleteStaff = asyncHandler(async (req, res) => {
     }
   }
 
-  await Staff.deleteOne({ _id: staffId, pharmacyId: pharmacyDbId });
+  await Staff.deleteByIdAndPharmacy(staffId, pharmacyDbId);
 
   // Also remove user credentials if exists
   if (staff.email) {
-    await User.deleteMany({ email: staff.email, pharmacyId: pharmacyDbId });
+    await User.deleteByEmailAndPharmacy(staff.email, pharmacyDbId);
   }
 
   return res.json({ success: true, message: "Staff member deleted successfully" });
@@ -371,23 +372,12 @@ export const deleteStaff = asyncHandler(async (req, res) => {
 export const getStaffSales = asyncHandler(async (req, res) => {
   const pharmacyDbId = getPharmacyDbId();
 
-  const salesStats = await Transaction.aggregate([
-    { $match: { pharmacyId: pharmacyDbId, type: "OUT", employeeId: { $ne: null } } },
-    {
-      $group: {
-        _id: "$employeeId",
-        totalSales: { $sum: "$totalRevenue" },
-        transactionCount: { $sum: 1 },
-        totalProfit: { $sum: "$profit" }
-      }
-    }
-  ]);
-
-  const staffMembers = await Staff.find({ pharmacyId: pharmacyDbId });
-  const map = new Map(salesStats.map((s) => [String(s._id), s]));
+  const salesStats = await Transaction.aggregateStaffSales(pharmacyDbId);
+  const staffMembers = await Staff.findByPharmacy(pharmacyDbId);
+  const map = new Map(salesStats.map((s) => [String(s.employee_id), s]));
 
   const result = staffMembers.map((sm) => {
-    const stat = map.get(String(sm._id));
+    const stat = map.get(String(sm.id || sm._id));
     return {
       _id: sm._id,
       id: sm._id,
@@ -395,9 +385,9 @@ export const getStaffSales = asyncHandler(async (req, res) => {
       email: sm.email,
       position: sm.position,
       department: sm.department,
-      totalSales: stat ? stat.totalSales : sm.totalSales || 0,
-      transactionCount: stat ? stat.transactionCount : 0,
-      totalProfit: stat ? stat.totalProfit : 0
+      totalSales: stat ? Number(stat.total_sales) : Number(sm.totalSales || 0),
+      transactionCount: stat ? Number(stat.transaction_count) : 0,
+      totalProfit: stat ? Number(stat.total_profit) : 0
     };
   });
 

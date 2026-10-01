@@ -20,16 +20,14 @@ async function runTests() {
     const pharm = await Pharmacy.findOne({ slug: "concurrency-test-pharmacy" });
     if (pharm) {
       const pId = pharm._id;
-      await Promise.all([
-        Prediction.deleteMany({ pharmacyId: pId }),
-        Alert.deleteMany({ pharmacyId: pId }),
-        Transaction.deleteMany({ pharmacyId: pId }),
-        Inventory.deleteMany({ pharmacyId: pId }),
-        Medicine.deleteMany({ pharmacyId: pId }),
-        Staff.deleteMany({ pharmacyId: pId }),
-        User.deleteMany({ pharmacyId: pId }),
-        Pharmacy.deleteOne({ _id: pId })
-      ]);
+      await Prediction.deleteMany({ pharmacyId: pId });
+      await Alert.deleteMany({ pharmacyId: pId });
+      await Transaction.deleteMany({ pharmacyId: pId });
+      await Inventory.deleteMany({ pharmacyId: pId });
+      await Medicine.deleteMany({ pharmacyId: pId });
+      await Staff.deleteMany({ pharmacyId: pId });
+      await User.deleteMany({ pharmacyId: pId });
+      await Pharmacy.deleteOne({ _id: pId });
     }
     await Otp.deleteMany({});
   };

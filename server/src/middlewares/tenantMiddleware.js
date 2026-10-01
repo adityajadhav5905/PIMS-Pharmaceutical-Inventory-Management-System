@@ -1,6 +1,6 @@
 import { tenantStorage } from "../utils/tenantContext.js";
 import { verifyAccessToken } from "../config/jwt.js";
-import { Pharmacy } from "../models/Pharmacy.js";
+import { Pharmacy } from "../models/index.js";
 
 export const tenantMiddleware = async (req, res, next) => {
   let pharmacyId = null;
@@ -25,8 +25,8 @@ export const tenantMiddleware = async (req, res, next) => {
   if (pharmacyId) {
     try {
       const cleanSlug = String(pharmacyId).toLowerCase().trim();
-      const pharmacy = await Pharmacy.findOne({ slug: cleanSlug });
-      const pharmacyDbId = pharmacy ? pharmacy._id : null;
+      const pharmacy = await Pharmacy.findBySlug(cleanSlug);
+      const pharmacyDbId = pharmacy ? pharmacy.id : null;
       tenantStorage.run({ pharmacyId: cleanSlug, pharmacyDbId }, next);
     } catch (err) {
       next(err);

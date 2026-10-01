@@ -23,7 +23,7 @@ async function seed() {
     process.exit(1);
   }
 
-  logger.info({ message: "Connecting to MongoDB for isolated test dataset initialization..." });
+  logger.info({ message: "Connecting to MySQL for isolated test dataset initialization..." });
   await connectDb();
 
   logger.info({ message: "Initializing test environment collections..." });
@@ -284,7 +284,7 @@ async function seed() {
     }
   }
 
-  logger.info({ message: "Multi-tenant MongoDB seeding completed successfully!" });
+  logger.info({ message: "Multi-tenant MySQL seeding completed successfully!" });
 }
 
 seed()
